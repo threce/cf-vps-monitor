@@ -5945,6 +5945,8 @@ returns jsonb
 language plpgsql security definer
 set search_path = public
 as $$
+declare
+  updated_row restock_monitors%rowtype;
 begin
   update restock_monitors set
     name = coalesce(input_monitor->>'name', name),
@@ -5962,7 +5964,13 @@ begin
     notify_on_out_of_stock = coalesce((input_monitor->>'notify_on_out_of_stock')::boolean, notify_on_out_of_stock),
     updated_at = now()
   where id = input_id
-  returning to_jsonb(restock_monitors.*);
+  returning * into updated_row;
+
+  if not found then
+    return null;
+  end if;
+
+  return to_jsonb(updated_row);
 end;
 $$;
 revoke all on function public.cfm_update_restock_monitor(integer, jsonb) from public, anon, authenticated;

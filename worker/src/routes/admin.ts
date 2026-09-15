@@ -2266,8 +2266,9 @@ adminRoutes.post('/restock/edit', async (c) => {
     runAdminBackground(c, db.insertAuditLog(database, c.get('username')!, 'restock_edit', `编辑补货监控: ${existing.name} -> ${monitor.name}`));
     return c.json({ success: true, changed: 1, monitor });
   } catch (error) {
-    console.error('[admin] restock edit failed:', sanitizeSetupDiagnosticDetail(error));
-    return c.json({ error: '编辑失败' }, 500);
+    const detail = sanitizeSetupDiagnosticDetail(error);
+    console.error('[admin] restock edit failed:', detail);
+    return c.json({ error: '编辑失败', detail }, 500);
   }
 });
 

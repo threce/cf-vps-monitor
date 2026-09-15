@@ -526,21 +526,21 @@ export default function RestockMonitors() {
   const openEditDialog = (monitor: RestockMonitor) => {
     setEditingId(monitor.id);
     setForm({
-      name: monitor.name,
-      url: monitor.url,
-      check_mode: monitor.check_mode,
-      stock_keywords_text: monitor.stock_keywords.join(', '),
-      out_of_stock_keywords_text: monitor.out_of_stock_keywords.join(', '),
+      name: monitor.name || '',
+      url: monitor.url || '',
+      check_mode: monitor.check_mode || 'keyword',
+      stock_keywords_text: (monitor.stock_keywords || []).join(', '),
+      out_of_stock_keywords_text: (monitor.out_of_stock_keywords || []).join(', '),
       stock_pattern: monitor.stock_pattern || '',
       custom_headers_text: Object.entries(monitor.custom_headers || {})
         .map(([k, v]) => `${k}: ${v}`)
         .join('\n'),
-      interval_sec: monitor.interval_sec,
-      timeout_sec: monitor.timeout_sec,
-      enabled: monitor.enabled,
-      hidden: monitor.hidden,
-      notify_on_restock: monitor.notify_on_restock,
-      notify_on_out_of_stock: monitor.notify_on_out_of_stock,
+      interval_sec: monitor.interval_sec || 120,
+      timeout_sec: monitor.timeout_sec || 15,
+      enabled: monitor.enabled !== false,
+      hidden: Boolean(monitor.hidden),
+      notify_on_restock: monitor.notify_on_restock !== false,
+      notify_on_out_of_stock: Boolean(monitor.notify_on_out_of_stock),
     });
     setEditOpen(true);
   };
