@@ -175,6 +175,8 @@ function canServeWithoutDatabaseStartup(pathname: string): boolean {
     pathname.startsWith('/api/recent/') ||
     pathname === '/api/websites' ||
     pathname.startsWith('/api/websites/') ||
+    pathname === '/api/restock' ||
+    pathname.startsWith('/api/restock/') ||
     pathname === '/api/theme/active.css' ||
     pathname.startsWith('/api/theme/assets/') ||
     pathname.startsWith('/api/theme/manifest/') ||
