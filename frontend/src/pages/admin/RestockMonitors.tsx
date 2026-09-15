@@ -25,6 +25,7 @@ import {
   Dialog,
   Flex,
   Grid,
+  IconButton,
   Select,
   Switch,
   SegmentedControl,
@@ -626,107 +627,172 @@ export default function RestockMonitors() {
     });
   };
 
+  const handleBatchVisibility = async (hidden: boolean) => {
+    if (selectedIds.size === 0) return;
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map(id =>
+          apiFetch('/admin/restock/visibility', {
+            method: 'POST',
+            body: JSON.stringify({ id, hidden }),
+          })
+        )
+      );
+      setMonitors(prev =>
+        prev.map(m => selectedIds.has(m.id) ? { ...m, hidden } : m)
+      );
+      toast.success(hidden ? '已设为隐藏' : '已设为公开');
+      setSelectedIds(new Set());
+    } catch {
+      toast.error('批量更新可见性失败');
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`确定要删除选中的 ${selectedIds.size} 个监控项吗？`)) return;
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map(id =>
+          apiFetch('/admin/restock/delete', {
+            method: 'POST',
+            body: JSON.stringify({ id }),
+          })
+        )
+      );
+      setMonitors(prev => prev.filter(m => !selectedIds.has(m.id)));
+      toast.success('已批量删除');
+      setSelectedIds(new Set());
+    } catch {
+      toast.error('批量删除失败');
+    }
+  };
+
   if (loading && monitors.length === 0) {
-    return <Loading fullScreen />;
+    return <Loading />;
   }
 
   return (
-    <Box className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
-      {/* 头部导航与统计 */}
-      <Flex justify="between" align="center" wrap="wrap" gap="4">
-        <div>
-          <Flex align="center" gap="2">
-            <ShoppingCart size={26} className="text-blue-500" />
-            <Text size="6" weight="bold">VPS 补货监控</Text>
-          </Flex>
-          <Text size="2" color="gray">
-            实时监控特价 VPS / 独立服务器库存页面，监测到补货自动发送 Telegram / 邮件 / Webhook 通知
-          </Text>
-        </div>
-        <Flex gap="2">
-          <Button variant="soft" onClick={loadMonitors}>
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            刷新
-          </Button>
-          <Button onClick={openAddDialog}>
-            <Plus size={14} />
-            添加监控
-          </Button>
+    <Flex className="admin-websites-page admin-restock-page" direction="column" gap="3">
+      {/* 顶部标题栏与概览指标（右侧留空 178px，与 AdminLayout 右上角固定全局按钮完全避让） */}
+      <Flex className="admin-parent-title-row admin-server-title-row" justify="between" align="center" mb="3">
+        <Flex align="center" gap="2">
+          <ShoppingCart size={20} />
+          <Text size="5" weight="bold">补货监控</Text>
         </Flex>
+        <section className="admin-page-hero admin-server-overview-hero admin-website-overview-hero">
+          <div className="admin-overview-strip">
+            <div className="admin-overview-item">
+              <Flex align="center" gap="2" className="admin-overview-line">
+                <Text size="2">全部</Text>
+                <Text size="4" weight="bold">{stats.total}</Text>
+              </Flex>
+            </div>
+            <div className="admin-overview-item">
+              <Flex align="center" gap="2" className="admin-overview-line">
+                <Text size="2">有货</Text>
+                <Text size="4" weight="bold" style={{ color: 'var(--green-9)' }}>{stats.in_stock}</Text>
+              </Flex>
+            </div>
+            <div className="admin-overview-item">
+              <Flex align="center" gap="2" className="admin-overview-line">
+                <Text size="2">缺货</Text>
+                <Text size="4" weight="bold" style={{ color: 'var(--red-9)' }}>{stats.out_of_stock}</Text>
+              </Flex>
+            </div>
+            <div className="admin-overview-item">
+              <Flex align="center" gap="2" className="admin-overview-line">
+                <Text size="2">异常</Text>
+                <Text size="4" weight="bold" style={{ color: 'var(--amber-9)' }}>{stats.error}</Text>
+              </Flex>
+            </div>
+          </div>
+        </section>
       </Flex>
 
-      {/* 统计状态卡片 */}
-      <Grid columns={{ initial: '2', sm: '4' }} gap="3">
-        <Card className="p-3">
-          <Text size="1" color="gray">全部监控</Text>
-          <Text size="5" weight="bold" className="block mt-1">{stats.total}</Text>
-        </Card>
-        <Card className="p-3">
-          <Flex align="center" gap="1">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <Text size="1" color="gray">当前有货</Text>
-          </Flex>
-          <Text size="5" weight="bold" className="block mt-1 text-emerald-500">{stats.in_stock}</Text>
-        </Card>
-        <Card className="p-3">
-          <Flex align="center" gap="1">
-            <span className="w-2 h-2 rounded-full bg-rose-500" />
-            <Text size="1" color="gray">当前缺货</Text>
-          </Flex>
-          <Text size="5" weight="bold" className="block mt-1 text-rose-500">{stats.out_of_stock}</Text>
-        </Card>
-        <Card className="p-3">
-          <Flex align="center" gap="1">
-            <span className="w-2 h-2 rounded-full bg-amber-500" />
-            <Text size="1" color="gray">检测异常</Text>
-          </Flex>
-          <Text size="5" weight="bold" className="block mt-1 text-amber-500">{stats.error}</Text>
-        </Card>
-      </Grid>
+      {/* 搜索与过滤工具栏卡片 */}
+      <Card className="admin-filter-card">
+        <Flex className="admin-filter-toolbar" direction="column" gap="2">
+          <Flex className="admin-filter-primary-row" gap="2" align="center" wrap="wrap">
+            <Box className="admin-status-filter">
+              <SegmentedControl.Root
+                value={statusFilter}
+                onValueChange={(v) => setStatusFilter(v as RestockStatusFilter)}
+                size="1"
+              >
+                <SegmentedControl.Item value="all">全部</SegmentedControl.Item>
+                <SegmentedControl.Item value="in_stock">有货</SegmentedControl.Item>
+                <SegmentedControl.Item value="out_of_stock">缺货</SegmentedControl.Item>
+                <SegmentedControl.Item value="error">异常</SegmentedControl.Item>
+                <SegmentedControl.Item value="hidden">隐藏</SegmentedControl.Item>
+              </SegmentedControl.Root>
+            </Box>
 
-      {/* 搜索与过滤工具栏 */}
-      <Card className="p-3">
-        <Flex justify="between" align="center" wrap="wrap" gap="3">
-          <Flex align="center" gap="2" className="flex-1 min-w-[240px]">
-            <TextField.Root
-              placeholder="搜索监控名称或链接..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full max-w-sm"
-            >
-              <TextField.Slot>
-                <Search size={14} />
-              </TextField.Slot>
-            </TextField.Root>
-          </Flex>
+            <Flex className="admin-search-cluster" gap="2" align="center">
+              <TextField.Root
+                className="admin-server-search"
+                size="1"
+                placeholder="查找监控名称或链接..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              >
+                <TextField.Slot><Search size={14} /></TextField.Slot>
+              </TextField.Root>
+              <IconButton
+                className="admin-refresh-button"
+                variant="soft"
+                size="1"
+                onClick={() => void loadMonitors()}
+                title="刷新"
+              >
+                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              </IconButton>
+            </Flex>
 
-          <Flex align="center" gap="2" wrap="wrap">
-            <SegmentedControl.Root
-              value={statusFilter}
-              onValueChange={v => setStatusFilter(v as RestockStatusFilter)}
-            >
-              <SegmentedControl.Item value="all">全部</SegmentedControl.Item>
-              <SegmentedControl.Item value="in_stock">有货</SegmentedControl.Item>
-              <SegmentedControl.Item value="out_of_stock">缺货</SegmentedControl.Item>
-              <SegmentedControl.Item value="error">异常</SegmentedControl.Item>
-              <SegmentedControl.Item value="hidden">隐藏</SegmentedControl.Item>
-            </SegmentedControl.Root>
+            <Box className="admin-filter-group-select admin-filter-spacer" aria-hidden="true" />
 
-            <Select.Root value={sortKey} onValueChange={v => setSortKey(v as RestockSortKey)}>
-              <Select.Trigger placeholder="排序方式" />
-              <Select.Content>
-                <Select.Item value="manual">手动排序</Select.Item>
-                <Select.Item value="name">按名称</Select.Item>
-                <Select.Item value="status">按状态</Select.Item>
-                <Select.Item value="checked_at">最近检测</Select.Item>
-              </Select.Content>
-            </Select.Root>
+            <Flex className="admin-sort-controls" gap="2" align="center">
+              <SegmentedControl.Root
+                value={sortKey}
+                onValueChange={(v) => setSortKey(v as RestockSortKey)}
+                size="1"
+              >
+                <SegmentedControl.Item value="manual">手动</SegmentedControl.Item>
+                <SegmentedControl.Item value="name">名称</SegmentedControl.Item>
+                <SegmentedControl.Item value="status">状态</SegmentedControl.Item>
+                <SegmentedControl.Item value="checked_at">最近检测</SegmentedControl.Item>
+              </SegmentedControl.Root>
+            </Flex>
+
+            <Button className="admin-add-server-button" size="1" onClick={openAddDialog}>
+              <Plus size={16} /> 添加监控
+            </Button>
           </Flex>
         </Flex>
       </Card>
 
-      {/* 监控列表表格 */}
-      <Card className="overflow-hidden p-0">
+      {/* 监控方案列表面板 */}
+      <Card className="admin-node-card-panel admin-website-table-card">
+        <Flex className="admin-node-card-panel-header" justify="between" align="center" gap="2" p="3">
+          <Text size="2" weight="bold">监控方案列表</Text>
+          <Flex align="center" gap="2" wrap="wrap">
+            {selectedIds.size > 0 && (
+              <Flex className="admin-selection-inline admin-website-selection-inline" gap="2" align="center">
+                <Badge variant="soft" color="blue">已选 {selectedIds.size}</Badge>
+                <Button variant="soft" size="1" onClick={() => void handleBatchVisibility(true)}>
+                  <EyeOff size={14} /> 批量隐藏
+                </Button>
+                <Button variant="soft" size="1" onClick={() => void handleBatchVisibility(false)}>
+                  <Eye size={14} /> 批量公开
+                </Button>
+                <Button variant="soft" color="red" size="1" onClick={() => void handleBatchDelete()}>
+                  <Trash2 size={14} /> 批量删除
+                </Button>
+                <Button variant="ghost" size="1" onClick={() => setSelectedIds(new Set())}>清除</Button>
+              </Flex>
+            )}
+          </Flex>
+        </Flex>
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -1067,6 +1133,6 @@ export default function RestockMonitors() {
           </Flex>
         </Dialog.Content>
       </Dialog.Root>
-    </Box>
+    </Flex>
   );
 }

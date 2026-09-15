@@ -1834,6 +1834,7 @@ html[data-monitor-theme='aurora'] .nav-logo-mark {
 /* ========== Table Enhancements ========== */
 .admin-dashboard-page,
 .admin-websites-page,
+.admin-restock-page,
 .admin-themes-page {
   padding: 0;
   gap: 8px !important;
@@ -1841,6 +1842,7 @@ html[data-monitor-theme='aurora'] .nav-logo-mark {
 
 .admin-dashboard-page > .admin-parent-title-row,
 .admin-websites-page > .admin-parent-title-row,
+.admin-restock-page > .admin-parent-title-row,
 .admin-themes-page > .admin-parent-title-row {
   margin-bottom: 0 !important;
 }
@@ -6073,18 +6075,23 @@ html[data-monitor-theme='aurora'] .nav-logo-mark {
   }
 
   .admin-websites-page,
+  .admin-restock-page,
   .admin-websites-page .rt-Card,
-  .admin-websites-page .rt-CardInner {
+  .admin-restock-page .rt-Card,
+  .admin-websites-page .rt-CardInner,
+  .admin-restock-page .rt-CardInner {
     min-width: 0;
     max-width: 100%;
   }
 
-  .admin-websites-page .admin-filter-primary-row {
+  .admin-websites-page .admin-filter-primary-row,
+  .admin-restock-page .admin-filter-primary-row {
     min-width: 0;
     width: 100%;
   }
 
-  .admin-websites-page .admin-filter-spacer {
+  .admin-websites-page .admin-filter-spacer,
+  .admin-restock-page .admin-filter-spacer {
     display: none;
   }
 
