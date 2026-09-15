@@ -30,6 +30,7 @@ const NotFound = lazy(loadNotFound);
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'));
 const AdminDashboard = lazy(loadAdminDashboard);
 const AdminWebsites = lazy(() => import('./pages/admin/Websites'));
+const AdminRestockMonitors = lazy(() => import('./pages/admin/RestockMonitors'));
 const SettingsLayout = lazy(loadSettingsLayout);
 const SettingsSite = lazy(loadSettingsSite);
 const SettingsGeneral = lazy(loadSettingsGeneral);
@@ -51,6 +52,7 @@ function preloadRouteChunks() {
   void import('./pages/admin/AdminLayout');
   void loadAdminDashboard();
   void import('./pages/admin/Websites');
+  void import('./pages/admin/RestockMonitors');
   void loadSettingsLayout();
   void loadSettingsSite();
   void loadSettingsGeneral();
@@ -133,6 +135,7 @@ export default function App() {
                   <Route index element={<LiveDataRoute><AdminDashboard /></LiveDataRoute>} />
                   <Route path="clients" element={<Navigate to="/admin" replace />} />
                   <Route path="websites" element={<AdminWebsites />} />
+                  <Route path="restock" element={<AdminRestockMonitors />} />
                   <Route path="settings" element={<SettingsLayout />}>
                     <Route index element={<SettingsSite />} />
                     <Route path="site" element={<SettingsSite />} />

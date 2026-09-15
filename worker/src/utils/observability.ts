@@ -52,6 +52,7 @@ export const STORED_HEALTH_COMPONENTS = [
   'cron_offline',
   'cron_expiry',
   'cron_website',
+  'cron_restock',
 ] as const;
 
 export type StoredHealthComponent = typeof STORED_HEALTH_COMPONENTS[number];

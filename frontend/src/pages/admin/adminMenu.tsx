@@ -12,6 +12,7 @@ import {
   Palette,
   ScrollText,
   Server,
+  ShoppingCart,
   TrendingUp,
   Unplug,
   User,
@@ -28,6 +29,7 @@ export interface AdminMenuItem {
 export const adminMenuItems: AdminMenuItem[] = [
   { path: '/admin', label: '服务器', icon: <Server size={18} /> },
   { path: '/admin/websites', label: '网站', icon: <Globe2 size={18} /> },
+  { path: '/admin/restock', label: '补货监控', icon: <ShoppingCart size={18} /> },
   {
     path: '/admin/settings',
     label: '系统设置',
@@ -62,6 +64,7 @@ export function isAdminMenuPathActive(itemPath: string, currentPath: string) {
       currentPath.startsWith('/admin/notification');
   }
   if (itemPath === '/admin/themes') return currentPath.startsWith('/admin/themes');
+  if (itemPath === '/admin/restock') return currentPath.startsWith('/admin/restock');
   if (itemPath === '/admin') return currentPath === '/admin' || currentPath.startsWith('/admin/clients');
   return currentPath === itemPath;
 }

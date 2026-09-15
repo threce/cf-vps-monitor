@@ -170,3 +170,36 @@ export function buildIpChangeNotification(input: {
     time: input.eventTime,
   });
 }
+
+export function buildRestockNotification(input: {
+  name: string;
+  url: string;
+  matchedText: string | null;
+  eventTime?: string | Date;
+}): NotificationMessage {
+  return eventMessage({
+    emoji: '🛒',
+    event: 'VPS 补货通知',
+    clients: input.name,
+    message: [
+      input.url,
+      input.matchedText ? `匹配: ${input.matchedText}` : '检测到有货',
+      '请尽快抢购！',
+    ].join('；'),
+    time: input.eventTime,
+  });
+}
+
+export function buildOutOfStockNotification(input: {
+  name: string;
+  url: string;
+  eventTime?: string | Date;
+}): NotificationMessage {
+  return eventMessage({
+    emoji: '📦',
+    event: 'VPS 缺货通知',
+    clients: input.name,
+    message: `${input.url}；已售罄或下架`,
+    time: input.eventTime,
+  });
+}

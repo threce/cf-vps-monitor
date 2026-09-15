@@ -16,6 +16,7 @@ import { mergePublicClientPatch, normalizePublicClients } from '../utils/publicC
 import { fetchWithBootstrapRetry } from '../utils/api';
 import { getNodeDisplayRecord, getNodeLastReportTime, getNodeStatus } from '../utils/nodeMetrics';
 import WebsiteMonitorList, { WebsiteMonitorSummary } from '../components/WebsiteMonitorList';
+import PublicRestockList, { type PublicRestockMonitor } from '../components/PublicRestockList';
 import { subscribeWebsiteMonitorsUpdated, type WebsiteMonitorsUpdateDetail } from '../utils/websiteMonitorEvents';
 import { notifyPublicDataReady, subscribePublicDataUpdated } from '../utils/publicDataEvents';
 import type { PublicDataUpdateDetail } from '../utils/publicDataEvents';
@@ -198,15 +199,39 @@ export default function Index() {
   const location = useLocation();
   const { authLoading, isAuthenticated } = useAuth();
   const { liveData, error, snapshotReady, clientMetadata: clients, setClientMetadata: setClients } = useLiveData();
-  const monitorMode = new URLSearchParams(location.search).get('view') === 'websites' ? 'websites' : 'servers';
+  const currentView = new URLSearchParams(location.search).get('view');
+  const monitorMode = currentView === 'websites' ? 'websites' : currentView === 'restock' ? 'restock' : 'servers';
   const [clientsLoading, setClientsLoading] = useState(clients === undefined);
   const [clientsError, setClientsError] = useState<string | null>(null);
   const [websites, setWebsites] = useState<WebsiteMonitorSummary[]>([]);
   const [websitesLoading, setWebsitesLoading] = useState(monitorMode === 'websites' && websites.length === 0);
   const [websitesError, setWebsitesError] = useState<string | null>(null);
   const [websitePeriodHours, setWebsitePeriodHours] = useState(24);
+  const [restockMonitors, setRestockMonitors] = useState<PublicRestockMonitor[]>([]);
+  const [restockLoading, setRestockLoading] = useState(false);
   // The public view always keeps offline nodes last, including older saved preferences.
   const offlinePosition = 'last';
+
+  const loadRestockMonitors = async () => {
+    try {
+      setRestockLoading(true);
+      const res = await fetch('/api/restock');
+      if (res.ok) {
+        const data = await res.json();
+        setRestockMonitors(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setRestockLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (monitorMode === 'restock') {
+      loadRestockMonitors();
+    }
+  }, [monitorMode]);
 
   const handleWebsitePeriodChange = (hours: number) => {
     if (hours === websitePeriodHours) return;
@@ -475,10 +500,18 @@ export default function Index() {
             includeHidden={isAuthenticated}
           />
         </React.Suspense>
-      ) : (
+      ) : monitorMode === 'websites' ? (
         <section className="website-monitor-shell">
           {websitesError && <ApiUnavailableNotice error={websitesError} />}
           <WebsiteMonitorList monitors={websites} loading={websitesLoading} periodHours={websitePeriodHours} onPeriodChange={handleWebsitePeriodChange} periods={WEBSITE_MONITOR_PERIODS} />
+        </section>
+      ) : (
+        <section className="restock-monitor-shell py-4">
+          <PublicRestockList
+            monitors={restockMonitors}
+            loading={restockLoading}
+            onRefresh={loadRestockMonitors}
+          />
         </section>
       )}
     </div>

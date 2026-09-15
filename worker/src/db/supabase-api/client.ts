@@ -1,5 +1,5 @@
 import type { AuditLogsPage, BoundedTableRowCounts, ClearAllRecordsResult, Client, ClientCapacityCounts, ClientIdentity, ClientReferenceCleanupResult, ClientTokenMeta, ClientVisibility, DeleteClientsResult, DeleteOldRowsOptions, ExpiryNotification, ExpiryNotificationUpdate, GPUHistoryRecord, GPUInfo, HistoryTableRowCounts,
-  HistoryTableByteSizes, LoadMetricWindowStats, LoadNotification, LoadNotificationInput, LoadNotificationMetric, LoginRateLimit, MonitorRecord, OfflineNotification, OfflineNotificationUpdate, OrphanClientDataCleanupResult, PingHistoryRecord, PingSnapshotInput, PingTask, PingTaskEstimateRow, PingTaskHistoryRequest, PublicClientRow, PublicWebsiteMonitor, ScheduledClientRow, TableRowCounts, Theme, ThemeAsset, ThemeAssetUpsertInput, ThemeUpsertInput, User, WebsiteCheck, WebsiteCheckInput, WebsiteMonitor, WebsiteMonitorInput } from '../types.ts';
+  HistoryTableByteSizes, LoadMetricWindowStats, LoadNotification, LoadNotificationInput, LoadNotificationMetric, LoginRateLimit, MonitorRecord, OfflineNotification, OfflineNotificationUpdate, OrphanClientDataCleanupResult, PingHistoryRecord, PingSnapshotInput, PingTask, PingTaskEstimateRow, PingTaskHistoryRequest, PublicClientRow, PublicRestockMonitor, PublicWebsiteMonitor, RestockCheck, RestockCheckInput, RestockMonitor, RestockMonitorInput, ScheduledClientRow, TableRowCounts, Theme, ThemeAsset, ThemeAssetUpsertInput, ThemeUpsertInput, User, WebsiteCheck, WebsiteCheckInput, WebsiteMonitor, WebsiteMonitorInput } from '../types.ts';
 import type { BackupData } from '../../utils/backup.ts';
 import type { BackupConfigurationSnapshot, HistoryStorageUsage, NotificationDeliveryClaim, NotificationDeliveryCleanupOptions, NotificationDeliveryCleanupResult } from '../types.ts';
 import { redactDatabaseSecrets } from '../../utils/setup-diagnostics.ts';
@@ -137,6 +137,57 @@ function normalizeWebsiteMonitor<T extends { agent_probe_clients?: unknown; agen
 function normalizeWebsiteMonitorList<T extends { agent_probe_clients?: unknown; agent_probe_status_enabled?: unknown }>(monitors: T[]): T[] {
   return monitors.map(normalizeWebsiteMonitor);
 }
+
+function readRpcJsonObject(value: unknown): Record<string, string> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, string>;
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function normalizeRestockMonitor<T extends {
+  stock_keywords?: unknown;
+  out_of_stock_keywords?: unknown;
+  custom_headers?: unknown;
+  enabled?: unknown;
+  hidden?: unknown;
+  notify_on_restock?: unknown;
+  notify_on_out_of_stock?: unknown;
+}>(monitor: T): T {
+  if (!monitor || typeof monitor !== 'object') return monitor;
+  const m = monitor as Record<string, unknown>;
+  return {
+    ...monitor,
+    stock_keywords: readRpcStringArray(m.stock_keywords),
+    out_of_stock_keywords: readRpcStringArray(m.out_of_stock_keywords),
+    custom_headers: readRpcJsonObject(m.custom_headers),
+    enabled: readRpcBoolean(m.enabled),
+    hidden: readRpcBoolean(m.hidden),
+    notify_on_restock: readRpcBoolean(m.notify_on_restock),
+    notify_on_out_of_stock: readRpcBoolean(m.notify_on_out_of_stock),
+  } as T;
+}
+
+function normalizeRestockMonitorList<T extends {
+  stock_keywords?: unknown;
+  out_of_stock_keywords?: unknown;
+  custom_headers?: unknown;
+  enabled?: unknown;
+  hidden?: unknown;
+  notify_on_restock?: unknown;
+  notify_on_out_of_stock?: unknown;
+}>(monitors: T[]): T[] {
+  return monitors.map(normalizeRestockMonitor);
+}
+
 
 export function getSupabasePublicSettings(env: SupabaseApiEnv): Promise<Record<string, string>> {
   return callSupabaseRpc<Record<string, string>>(env, 'cfm_public_settings');
@@ -1190,3 +1241,84 @@ export function trySupabaseClaimAuditThrottle(
     input_throttle_ms: throttleMs,
   });
 }
+
+// ── Restock Monitors ──────────────────────────────────────────
+
+export function listSupabaseRestockMonitors(env: SupabaseApiEnv): Promise<RestockMonitor[]> {
+  return callSupabaseRpc<RestockMonitor[]>(env, 'cfm_restock_monitors').then(normalizeRestockMonitorList);
+}
+
+export function getSupabaseRestockMonitor(env: SupabaseApiEnv, id: number): Promise<RestockMonitor | null> {
+  return callSupabaseRpc<RestockMonitor | null>(env, 'cfm_restock_monitor', { input_id: id })
+    .then(monitor => monitor ? normalizeRestockMonitor(monitor) : null);
+}
+
+export function getSupabasePublicRestockMonitors(env: SupabaseApiEnv, fetcher: typeof fetch = fetch): Promise<PublicRestockMonitor[]> {
+  return callSupabaseRpc<PublicRestockMonitor[]>(env, 'cfm_public_restock_monitors', {}, fetcher);
+}
+
+export function createSupabaseRestockMonitor(env: SupabaseApiEnv, monitor: RestockMonitorInput): Promise<RestockMonitor> {
+  return callSupabaseRpc<RestockMonitor>(env, 'cfm_create_restock_monitor', { input_monitor: monitor }).then(normalizeRestockMonitor);
+}
+
+export function updateSupabaseRestockMonitorAndReturn(
+  env: SupabaseApiEnv,
+  id: number,
+  monitor: Partial<RestockMonitorInput>,
+): Promise<RestockMonitor | null> {
+  return callSupabaseRpc<RestockMonitor | null>(env, 'cfm_update_restock_monitor', {
+    input_id: id,
+    input_monitor: monitor,
+  }).then(m => m ? normalizeRestockMonitor(m) : null);
+}
+
+export async function updateSupabaseRestockMonitor(
+  env: SupabaseApiEnv,
+  id: number,
+  monitor: Partial<RestockMonitorInput>,
+): Promise<boolean> {
+  return (await updateSupabaseRestockMonitorAndReturn(env, id, monitor)) !== null;
+}
+
+export function deleteSupabaseRestockMonitor(env: SupabaseApiEnv, id: number): Promise<void> {
+  return callSupabaseRpc<void>(env, 'cfm_delete_restock_monitor', { input_id: id });
+}
+
+export function listSupabaseDueRestockMonitors(env: SupabaseApiEnv, now: string, limit: number): Promise<RestockMonitor[]> {
+  return callSupabaseRpc<RestockMonitor[]>(env, 'cfm_due_restock_monitors', {
+    input_now: now,
+    input_limit: limit,
+  }).then(normalizeRestockMonitorList);
+}
+
+export function recordSupabaseRestockCheck(env: SupabaseApiEnv, check: RestockCheckInput): Promise<RestockMonitor | null> {
+  return callSupabaseRpc<RestockMonitor | null>(env, 'cfm_record_restock_check', { input_check: check })
+    .then(m => m ? normalizeRestockMonitor(m) : null);
+}
+
+export function markSupabaseRestockMonitorNotified(
+  env: SupabaseApiEnv,
+  id: number,
+  time: string | null,
+): Promise<boolean> {
+  return callSupabaseRpc<boolean>(env, 'cfm_mark_restock_monitor_notified', {
+    input_id: id,
+    input_time: time,
+  });
+}
+
+export function listSupabaseRestockChecks(env: SupabaseApiEnv, monitorId: number, limit: number): Promise<RestockCheck[]> {
+  return callSupabaseRpc<RestockCheck[]>(env, 'cfm_restock_checks', {
+    input_monitor_id: monitorId,
+    input_limit: limit,
+  });
+}
+
+export function reorderSupabaseRestockMonitors(env: SupabaseApiEnv, ids: number[]): Promise<void> {
+  return callSupabaseRpc<void>(env, 'cfm_reorder_restock_monitors', { input_ids: ids });
+}
+
+export function cleanupSupabaseRestockChecks(env: SupabaseApiEnv, days: number = 30): Promise<number> {
+  return callSupabaseRpc<number>(env, 'cfm_cleanup_restock_checks', { input_days: days });
+}
+

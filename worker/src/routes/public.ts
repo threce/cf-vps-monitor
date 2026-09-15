@@ -1663,6 +1663,14 @@ publicRoutes.get('/websites/:id', async (c) => {
   return includeHidden ? privateJsonResponse(monitor) : setPublicMetadataResponse(c, monitor);
 });
 
+// 补货监控列表（公开）
+publicRoutes.get('/restock', async (c) => {
+  const database = getDatabase(c.env);
+  const monitors = await db.listPublicRestockMonitors(database);
+  return c.json(monitors);
+});
+
+
 // 节点信息（兼容旧版格式）
 publicRoutes.get('/nodes', async (c) => {
   const includeHidden = c.req.query('include_hidden') === '1' && await hasAdminSession(c);

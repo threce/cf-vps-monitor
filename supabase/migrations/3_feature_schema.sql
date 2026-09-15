@@ -233,3 +233,70 @@ alter table users add constraint users_totp_state_consistent
     (totp_enabled_at is null and totp_secret_enc is null and recovery_code_hashes = '[]'::jsonb)
     or (totp_enabled_at is not null and nullif(totp_secret_enc, '') is not null)
   );
+
+-- -----------------------------------------------------------------------------
+-- Restock Monitor
+set local search_path = public;
+
+create table if not exists restock_monitors (
+  id bigint generated always as identity primary key,
+  name text not null,
+  url text not null,
+  check_mode text not null default 'keyword',
+  stock_keywords jsonb not null default '[]'::jsonb,
+  out_of_stock_keywords jsonb not null default '[]'::jsonb,
+  stock_pattern text not null default '',
+  custom_headers jsonb not null default '{}'::jsonb,
+  interval_sec integer not null default 120,
+  timeout_sec integer not null default 15,
+  enabled boolean not null default true,
+  hidden boolean not null default false,
+  notify_on_restock boolean not null default true,
+  notify_on_out_of_stock boolean not null default false,
+  sort_order integer not null default 0,
+  status text not null default 'unknown',
+  last_checked_at timestamptz,
+  last_in_stock_at timestamptz,
+  last_out_of_stock_at timestamptz,
+  last_notified_at timestamptz,
+  last_error text,
+  last_matched_text text,
+  last_status_code integer,
+  last_latency_ms integer,
+  status_changed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint restock_monitors_check_mode_check check (check_mode in ('keyword', 'regex', 'status_code')),
+  constraint restock_monitors_interval_check check (interval_sec between 60 and 86400),
+  constraint restock_monitors_timeout_check check (timeout_sec between 1 and 30),
+  constraint restock_monitors_status_check check (status in ('unknown', 'in_stock', 'out_of_stock', 'error'))
+);
+
+create table if not exists restock_checks (
+  id bigint generated always as identity primary key,
+  monitor_id bigint not null references restock_monitors(id) on delete cascade,
+  checked_at timestamptz not null,
+  in_stock boolean not null,
+  matched_text text,
+  status_code integer,
+  latency_ms integer,
+  error text,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_restock_checks_monitor_time on restock_checks(monitor_id, checked_at desc);
+
+alter table public.restock_monitors enable row level security;
+alter table public.restock_checks enable row level security;
+alter table public.restock_monitors force row level security;
+alter table public.restock_checks force row level security;
+
+grant select, insert, update, delete on public.restock_monitors to cf_monitor_app;
+grant select, insert, update, delete on public.restock_checks to cf_monitor_app;
+grant usage on sequence restock_monitors_id_seq to cf_monitor_app;
+grant usage on sequence restock_checks_id_seq to cf_monitor_app;
+
+drop policy if exists cf_monitor_app_all on public.restock_monitors;
+create policy cf_monitor_app_all on public.restock_monitors for all to cf_monitor_app using (true) with check (true);
+drop policy if exists cf_monitor_app_all on public.restock_checks;
+create policy cf_monitor_app_all on public.restock_checks for all to cf_monitor_app using (true) with check (true);
+

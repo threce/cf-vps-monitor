@@ -750,3 +750,58 @@ export async function tryClaimAuditThrottle(
 ): Promise<boolean> {
   return sba.trySupabaseClaimAuditThrottle(database.env, key, now, throttleMs);
 }
+
+// ── Restock Monitors ──────────────────────────────────────────
+
+export async function listRestockMonitors(database: QueryDatabase): Promise<t.RestockMonitor[]> {
+  return sba.listSupabaseRestockMonitors(database.env);
+}
+
+export async function getRestockMonitor(database: QueryDatabase, id: number): Promise<t.RestockMonitor | null> {
+  return sba.getSupabaseRestockMonitor(database.env, id);
+}
+
+export async function listPublicRestockMonitors(database: QueryDatabase): Promise<t.PublicRestockMonitor[]> {
+  return sba.getSupabasePublicRestockMonitors(database.env);
+}
+
+export async function createRestockMonitor(database: QueryDatabase, monitor: t.RestockMonitorInput): Promise<t.RestockMonitor> {
+  return sba.createSupabaseRestockMonitor(database.env, monitor);
+}
+
+export async function updateRestockMonitor(database: QueryDatabase, id: number, monitor: Partial<t.RestockMonitorInput>): Promise<boolean> {
+  return sba.updateSupabaseRestockMonitor(database.env, id, monitor);
+}
+
+export async function updateRestockMonitorAndReturn(database: QueryDatabase, id: number, monitor: Partial<t.RestockMonitorInput>): Promise<t.RestockMonitor | null> {
+  return sba.updateSupabaseRestockMonitorAndReturn(database.env, id, monitor);
+}
+
+export async function deleteRestockMonitor(database: QueryDatabase, id: number): Promise<void> {
+  return sba.deleteSupabaseRestockMonitor(database.env, id);
+}
+
+export async function listDueRestockMonitors(database: QueryDatabase, now: string, limit: number = 20): Promise<t.RestockMonitor[]> {
+  return sba.listSupabaseDueRestockMonitors(database.env, now, limit);
+}
+
+export async function recordRestockCheck(database: QueryDatabase, check: t.RestockCheckInput): Promise<t.RestockMonitor | null> {
+  return sba.recordSupabaseRestockCheck(database.env, check);
+}
+
+export async function markRestockMonitorNotified(database: QueryDatabase, id: number, time: string | null): Promise<boolean> {
+  return sba.markSupabaseRestockMonitorNotified(database.env, id, time);
+}
+
+export async function listRestockChecks(database: QueryDatabase, monitorId: number, limit: number = 60): Promise<t.RestockCheck[]> {
+  return sba.listSupabaseRestockChecks(database.env, monitorId, limit);
+}
+
+export async function reorderRestockMonitors(database: QueryDatabase, ids: number[]): Promise<void> {
+  return sba.reorderSupabaseRestockMonitors(database.env, ids);
+}
+
+export async function cleanupRestockChecks(database: QueryDatabase, days: number = 30): Promise<number> {
+  return sba.cleanupSupabaseRestockChecks(database.env, days);
+}
+

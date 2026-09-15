@@ -35,10 +35,17 @@ import {
   shouldNotifyWebsiteRecovery,
 } from './utils/website-monitor';
 import {
+  checkRestockMonitor,
+  shouldNotifyRestock,
+  shouldNotifyOutOfStock,
+} from './utils/restock-monitor';
+import {
   buildExpiryNotification,
   buildLoadNotification,
   buildNodeRecoveryNotification,
   buildOfflineNotification,
+  buildOutOfStockNotification,
+  buildRestockNotification,
   buildWebsiteAlertNotification,
   buildWebsiteRecoveryNotification,
   type NotificationMessage,
@@ -951,6 +958,49 @@ async function runWebsiteMonitorChecks(context: ScheduledRunContext, now: Date):
   }
 }
 
+async function runRestockMonitorChecks(context: ScheduledRunContext, now: Date): Promise<void> {
+  const monitors = await db.listDueRestockMonitors(context.database, now.toISOString(), 20);
+  for await (const monitor of scheduledItems(context, 'restock', monitors, m => String(m.id))) {
+    const check = await checkRestockMonitor(monitor);
+    const updated = await db.recordRestockCheck(context.database, check);
+    if (!updated) continue;
+
+    if (shouldNotifyRestock(
+      monitor.status,
+      updated.status,
+      updated.notify_on_restock,
+      updated.last_notified_at,
+      updated.status_changed_at,
+    )) {
+      const sent = await sendNotification(context, buildRestockNotification({
+        name: updated.name,
+        url: updated.url,
+        matchedText: updated.last_matched_text,
+        eventTime: now,
+      }), { key: `restock:${updated.id}`, eventId: `restock:${updated.last_in_stock_at}` }, now);
+      if (!sent) continue;
+      if (!(await db.markRestockMonitorNotified(context.database, updated.id, now.toISOString()))) continue;
+      await db.insertAuditLog(context.database, 'system', 'restock_alert', `${sent ? '已发送' : '已记录'}补货通知: ${updated.name}`);
+    }
+
+    if (shouldNotifyOutOfStock(
+      monitor.status,
+      updated.status,
+      updated.notify_on_out_of_stock,
+    )) {
+      const sent = await sendNotification(context, buildOutOfStockNotification({
+        name: updated.name,
+        url: updated.url,
+        eventTime: now,
+      }), { key: `restock:${updated.id}`, eventId: `out_of_stock:${updated.last_out_of_stock_at}` }, now);
+      if (!sent) continue;
+      if (!(await db.markRestockMonitorNotified(context.database, updated.id, now.toISOString()))) continue;
+      await db.insertAuditLog(context.database, 'system', 'out_of_stock_alert', `${sent ? '已发送' : '已记录'}缺货通知: ${updated.name}`);
+    }
+  }
+}
+
+
 async function runScheduledStep(
   context: ScheduledRunContext,
   component: StoredHealthComponent,
@@ -990,6 +1040,7 @@ async function runScheduled(env: Bindings): Promise<void> {
       ['cron_offline', 'cron_offline_error', '离线告警检查', () => runOfflineCheck(context, now)],
       ['cron_expiry', 'cron_expiry_error', '到期提醒检查', () => runExpiryCheck(context, now)],
       ['cron_website', 'cron_website_error', '网站监控检查', () => runWebsiteMonitorChecks(context, now)],
+      ['cron_restock', 'cron_restock_error', '补货监控检查', () => runRestockMonitorChecks(context, now)],
     ] as const;
     try {
       for (const [component, action, label, step] of rotateScheduledItems(steps, Math.floor(now.getTime() / 120_000))) {

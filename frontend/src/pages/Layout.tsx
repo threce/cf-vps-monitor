@@ -114,10 +114,12 @@ export default function Layout() {
     theme === "light" ? "切换成深色模式" : theme === "dark" ? "切换成跟随系统" : "切换成浅色模式";
   const bgUrl = isMobile ? (bgUrlMobile || bgUrlDesktop) : (bgUrlDesktop || bgUrlMobile);
   const contentWidth = mainContentWidth >= 100 ? "100%" : `${mainContentWidth}vw`;
-  const monitorMode = new URLSearchParams(location.search).get("view") === "websites" ? "websites" : "servers";
+  const currentView = new URLSearchParams(location.search).get("view");
+  const monitorMode = currentView === "websites" ? "websites" : currentView === "restock" ? "restock" : "servers";
   const setMonitorMode = (value: string) => {
     const params = new URLSearchParams(location.search);
     if (value === "websites") params.set("view", "websites");
+    else if (value === "restock") params.set("view", "restock");
     else params.delete("view");
     navigate({ pathname: "/", search: params.toString() ? `?${params}` : "" });
   };
@@ -149,6 +151,7 @@ export default function Layout() {
               <SegmentedControl.Root className="nav-monitor-switch" value={monitorMode} onValueChange={setMonitorMode} size="2">
                 <SegmentedControl.Item value="servers">服务器监控</SegmentedControl.Item>
                 <SegmentedControl.Item value="websites">网站监控</SegmentedControl.Item>
+                <SegmentedControl.Item value="restock">补货监控</SegmentedControl.Item>
               </SegmentedControl.Root>
             )}
           </div>

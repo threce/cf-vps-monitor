@@ -5855,3 +5855,264 @@ end;
 $$;
 revoke all on function public.cfm_mark_load_notification_sent(integer, text, text, text) from public, anon, authenticated;
 grant execute on function public.cfm_mark_load_notification_sent(integer, text, text, text) to service_role;
+
+-- ============================================================
+-- RPC: 补货监控（Restock Monitors）
+-- ============================================================
+
+create or replace function public.cfm_restock_monitors()
+returns jsonb
+language sql stable security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(to_jsonb(r.*) order by r.sort_order, r.id), '[]'::jsonb)
+    from restock_monitors r;
+$$;
+revoke all on function public.cfm_restock_monitors() from public, anon, authenticated;
+grant execute on function public.cfm_restock_monitors() to service_role;
+
+create or replace function public.cfm_restock_monitor(input_id integer)
+returns jsonb
+language sql stable security definer
+set search_path = public
+as $$
+  select to_jsonb(r.*)
+    from restock_monitors r
+   where r.id = input_id;
+$$;
+revoke all on function public.cfm_restock_monitor(integer) from public, anon, authenticated;
+grant execute on function public.cfm_restock_monitor(integer) to service_role;
+
+create or replace function public.cfm_public_restock_monitors()
+returns jsonb
+language sql stable security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id', r.id,
+    'name', r.name,
+    'url', r.url,
+    'status', r.status,
+    'last_checked_at', r.last_checked_at,
+    'last_in_stock_at', r.last_in_stock_at,
+    'last_matched_text', r.last_matched_text,
+    'interval_sec', r.interval_sec,
+    'status_changed_at', r.status_changed_at
+  ) order by r.sort_order, r.id), '[]'::jsonb)
+    from restock_monitors r
+   where r.hidden = false and r.enabled = true;
+$$;
+revoke all on function public.cfm_public_restock_monitors() from public, anon, authenticated;
+grant execute on function public.cfm_public_restock_monitors() to service_role;
+
+create or replace function public.cfm_create_restock_monitor(input_monitor jsonb)
+returns jsonb
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  created_row restock_monitors%rowtype;
+begin
+  insert into restock_monitors (
+    name, url, check_mode,
+    stock_keywords, out_of_stock_keywords, stock_pattern,
+    custom_headers, interval_sec, timeout_sec,
+    enabled, hidden, notify_on_restock, notify_on_out_of_stock, sort_order
+  ) values (
+    input_monitor->>'name',
+    input_monitor->>'url',
+    coalesce(input_monitor->>'check_mode', 'keyword'),
+    coalesce(input_monitor->'stock_keywords', '[]'::jsonb),
+    coalesce(input_monitor->'out_of_stock_keywords', '[]'::jsonb),
+    coalesce(input_monitor->>'stock_pattern', ''),
+    coalesce(input_monitor->'custom_headers', '{}'::jsonb),
+    coalesce((input_monitor->>'interval_sec')::integer, 120),
+    coalesce((input_monitor->>'timeout_sec')::integer, 15),
+    coalesce((input_monitor->>'enabled')::boolean, true),
+    coalesce((input_monitor->>'hidden')::boolean, false),
+    coalesce((input_monitor->>'notify_on_restock')::boolean, true),
+    coalesce((input_monitor->>'notify_on_out_of_stock')::boolean, false),
+    (select coalesce(max(sort_order), 0) + 1 from restock_monitors)
+  ) returning * into created_row;
+  return to_jsonb(created_row);
+end;
+$$;
+revoke all on function public.cfm_create_restock_monitor(jsonb) from public, anon, authenticated;
+grant execute on function public.cfm_create_restock_monitor(jsonb) to service_role;
+
+create or replace function public.cfm_update_restock_monitor(input_id integer, input_monitor jsonb)
+returns jsonb
+language plpgsql security definer
+set search_path = public
+as $$
+begin
+  update restock_monitors set
+    name = coalesce(input_monitor->>'name', name),
+    url = coalesce(input_monitor->>'url', url),
+    check_mode = coalesce(input_monitor->>'check_mode', check_mode),
+    stock_keywords = coalesce(input_monitor->'stock_keywords', stock_keywords),
+    out_of_stock_keywords = coalesce(input_monitor->'out_of_stock_keywords', out_of_stock_keywords),
+    stock_pattern = coalesce(input_monitor->>'stock_pattern', stock_pattern),
+    custom_headers = coalesce(input_monitor->'custom_headers', custom_headers),
+    interval_sec = coalesce((input_monitor->>'interval_sec')::integer, interval_sec),
+    timeout_sec = coalesce((input_monitor->>'timeout_sec')::integer, timeout_sec),
+    enabled = coalesce((input_monitor->>'enabled')::boolean, enabled),
+    hidden = coalesce((input_monitor->>'hidden')::boolean, hidden),
+    notify_on_restock = coalesce((input_monitor->>'notify_on_restock')::boolean, notify_on_restock),
+    notify_on_out_of_stock = coalesce((input_monitor->>'notify_on_out_of_stock')::boolean, notify_on_out_of_stock),
+    updated_at = now()
+  where id = input_id
+  returning to_jsonb(restock_monitors.*);
+end;
+$$;
+revoke all on function public.cfm_update_restock_monitor(integer, jsonb) from public, anon, authenticated;
+grant execute on function public.cfm_update_restock_monitor(integer, jsonb) to service_role;
+
+create or replace function public.cfm_delete_restock_monitor(input_id integer)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+begin
+  delete from restock_checks where monitor_id = input_id;
+  delete from restock_monitors where id = input_id;
+end;
+$$;
+revoke all on function public.cfm_delete_restock_monitor(integer) from public, anon, authenticated;
+grant execute on function public.cfm_delete_restock_monitor(integer) to service_role;
+
+create or replace function public.cfm_due_restock_monitors(input_now text, input_limit integer default 20)
+returns jsonb
+language sql stable security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(to_jsonb(r.*) order by r.last_checked_at nulls first, r.id), '[]'::jsonb)
+    from restock_monitors r
+   where r.enabled = true
+     and (r.last_checked_at is null
+          or r.last_checked_at <= (input_now::timestamptz - (r.interval_sec || ' seconds')::interval))
+   limit input_limit;
+$$;
+revoke all on function public.cfm_due_restock_monitors(text, integer) from public, anon, authenticated;
+grant execute on function public.cfm_due_restock_monitors(text, integer) to service_role;
+
+create or replace function public.cfm_record_restock_check(input_check jsonb)
+returns jsonb
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  mid bigint := (input_check->>'monitor_id')::bigint;
+  is_in_stock boolean := (input_check->>'in_stock')::boolean;
+  old_status text;
+  result_row restock_monitors%rowtype;
+begin
+  select status into old_status from restock_monitors where id = mid;
+
+  insert into restock_checks (monitor_id, checked_at, in_stock, matched_text, status_code, latency_ms, error)
+  values (
+    mid,
+    (input_check->>'checked_at')::timestamptz,
+    is_in_stock,
+    input_check->>'matched_text',
+    (input_check->>'status_code')::integer,
+    (input_check->>'latency_ms')::integer,
+    input_check->>'error'
+  );
+
+  update restock_monitors set
+    last_checked_at = (input_check->>'checked_at')::timestamptz,
+    last_status_code = (input_check->>'status_code')::integer,
+    last_latency_ms = (input_check->>'latency_ms')::integer,
+    last_error = input_check->>'error',
+    last_matched_text = case when is_in_stock then input_check->>'matched_text' else last_matched_text end,
+    status = case
+      when input_check->>'error' is not null and input_check->>'error' != '' then 'error'
+      when is_in_stock then 'in_stock'
+      else 'out_of_stock'
+    end,
+    last_in_stock_at = case when is_in_stock then (input_check->>'checked_at')::timestamptz else last_in_stock_at end,
+    last_out_of_stock_at = case when not is_in_stock and (input_check->>'error' is null or input_check->>'error' = '') then (input_check->>'checked_at')::timestamptz else last_out_of_stock_at end,
+    status_changed_at = case
+      when old_status is distinct from (case
+        when input_check->>'error' is not null and input_check->>'error' != '' then 'error'
+        when is_in_stock then 'in_stock'
+        else 'out_of_stock'
+      end) then (input_check->>'checked_at')::timestamptz
+      else status_changed_at
+    end,
+    updated_at = now()
+  where id = mid
+  returning * into result_row;
+
+  return to_jsonb(result_row);
+end;
+$$;
+revoke all on function public.cfm_record_restock_check(jsonb) from public, anon, authenticated;
+grant execute on function public.cfm_record_restock_check(jsonb) to service_role;
+
+create or replace function public.cfm_mark_restock_monitor_notified(input_id integer, input_time text)
+returns boolean
+language plpgsql security definer
+set search_path = public
+as $$
+begin
+  update restock_monitors
+     set last_notified_at = case when input_time is null then null else input_time::timestamptz end,
+         updated_at = now()
+   where id = input_id;
+  return found;
+end;
+$$;
+revoke all on function public.cfm_mark_restock_monitor_notified(integer, text) from public, anon, authenticated;
+grant execute on function public.cfm_mark_restock_monitor_notified(integer, text) to service_role;
+
+create or replace function public.cfm_restock_checks(input_monitor_id integer, input_limit integer default 100)
+returns jsonb
+language sql stable security definer
+set search_path = public
+as $$
+  select coalesce(jsonb_agg(to_jsonb(c.*) order by c.checked_at desc), '[]'::jsonb)
+    from restock_checks c
+   where c.monitor_id = input_monitor_id
+   limit input_limit;
+$$;
+revoke all on function public.cfm_restock_checks(integer, integer) from public, anon, authenticated;
+grant execute on function public.cfm_restock_checks(integer, integer) to service_role;
+
+create or replace function public.cfm_reorder_restock_monitors(input_ids jsonb)
+returns void
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  id_array bigint[];
+  i integer;
+begin
+  select array_agg(value::bigint) into id_array from jsonb_array_elements_text(input_ids);
+  if id_array is null then return; end if;
+  for i in 1..array_length(id_array, 1) loop
+    update restock_monitors set sort_order = i, updated_at = now() where id = id_array[i];
+  end loop;
+end;
+$$;
+revoke all on function public.cfm_reorder_restock_monitors(jsonb) from public, anon, authenticated;
+grant execute on function public.cfm_reorder_restock_monitors(jsonb) to service_role;
+
+create or replace function public.cfm_cleanup_restock_checks(input_days integer default 30)
+returns integer
+language plpgsql security definer
+set search_path = public
+as $$
+declare
+  deleted_count integer;
+begin
+  delete from restock_checks
+   where checked_at < now() - (input_days || ' days')::interval;
+  get diagnostics deleted_count = row_count;
+  return deleted_count;
+end;
+$$;
+revoke all on function public.cfm_cleanup_restock_checks(integer) from public, anon, authenticated;
+grant execute on function public.cfm_cleanup_restock_checks(integer) to service_role;
+

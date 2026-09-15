@@ -459,3 +459,80 @@ export interface BoundedTableRowCounts {
   capped: Partial<Record<keyof TableRowCounts, boolean>>;
   limit: number;
 }
+
+// ── Restock Monitor ──────────────────────────────────────────
+
+export type RestockMonitorStatus = 'unknown' | 'in_stock' | 'out_of_stock' | 'error';
+export type RestockCheckMode = 'keyword' | 'regex' | 'status_code';
+
+export interface RestockMonitor {
+  id: number;
+  name: string;
+  url: string;
+  check_mode: RestockCheckMode;
+  stock_keywords: string[];
+  out_of_stock_keywords: string[];
+  stock_pattern: string;
+  custom_headers: Record<string, string>;
+  interval_sec: number;
+  timeout_sec: number;
+  enabled: boolean;
+  hidden: boolean;
+  notify_on_restock: boolean;
+  notify_on_out_of_stock: boolean;
+  sort_order: number;
+  status: RestockMonitorStatus;
+  last_checked_at: string | null;
+  last_in_stock_at: string | null;
+  last_out_of_stock_at: string | null;
+  last_notified_at: string | null;
+  last_error: string | null;
+  last_matched_text: string | null;
+  last_status_code: number | null;
+  last_latency_ms: number | null;
+  status_changed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type RestockMonitorInput = Pick<
+  RestockMonitor,
+  | 'name'
+  | 'url'
+  | 'check_mode'
+  | 'stock_keywords'
+  | 'out_of_stock_keywords'
+  | 'stock_pattern'
+  | 'custom_headers'
+  | 'interval_sec'
+  | 'timeout_sec'
+  | 'enabled'
+  | 'hidden'
+  | 'notify_on_restock'
+  | 'notify_on_out_of_stock'
+>;
+
+export interface RestockCheck {
+  id: number;
+  monitor_id: number;
+  checked_at: string;
+  in_stock: boolean;
+  matched_text: string | null;
+  status_code: number | null;
+  latency_ms: number | null;
+  error: string | null;
+}
+
+export type RestockCheckInput = Omit<RestockCheck, 'id'>;
+
+export interface PublicRestockMonitor {
+  id: number;
+  name: string;
+  url: string;
+  status: RestockMonitorStatus;
+  last_checked_at: string | null;
+  last_in_stock_at: string | null;
+  last_matched_text: string | null;
+  interval_sec: number;
+  status_changed_at: string | null;
+}

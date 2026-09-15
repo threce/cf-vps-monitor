@@ -37,6 +37,7 @@ import { EMAIL_MESSAGE_MAX_CHARS } from '../utils/email';
 import { WEBHOOK_MESSAGE_MAX_CHARS } from '../utils/webhook';
 import { sanitizeSetupDiagnosticDetail } from '../utils/setup-diagnostics';
 import { checkWebsiteMonitorHttp, validateWebsiteMonitorInput } from '../utils/website-monitor';
+import { checkRestockMonitor, validateRestockMonitorInput } from '../utils/restock-monitor';
 import { readLiveSnapshot, readRateLimitResult } from '../utils/do-response';
 import { readJsonWithLimit, readRequestBytesWithLimit } from '../utils/request-body';
 import { bytesToBase64 } from '../utils/theme-package';
@@ -2192,6 +2193,181 @@ adminRoutes.post('/websites/:id/check', async (c) => {
     return c.json({ success: true, monitor: updated, check });
   } catch (error) {
     console.error('[admin] website check failed:', sanitizeSetupDiagnosticDetail(error));
+    return c.json({ error: '检测失败' }, 500);
+  }
+});
+
+// ============ 补货监控 ============
+
+adminRoutes.get('/restock', async (c) => {
+  const database = getDatabase(c.env);
+  return c.json(await db.listRestockMonitors(database));
+});
+
+adminRoutes.get('/restock/:id', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json({ error: '补货监控 ID 无效' }, 400);
+  }
+  const database = getDatabase(c.env);
+  const monitor = await db.getRestockMonitor(database, id);
+  if (!monitor) return c.json({ error: '补货监控不存在' }, 404);
+  return c.json(monitor);
+});
+
+adminRoutes.get('/restock/:id/checks', async (c) => {
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id) || id <= 0) {
+    return c.json({ error: '补货监控 ID 无效' }, 400);
+  }
+  const limit = Math.min(500, Math.max(1, Number(c.req.query('limit') || 60)));
+  const database = getDatabase(c.env);
+  return c.json(await db.listRestockChecks(database, id, limit));
+});
+
+adminRoutes.post('/restock/add', async (c) => {
+  try {
+    const parsed = await readAdminJsonObject(c);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.body;
+    const validated = validateRestockMonitorInput(body);
+    if (!validated.ok) return c.json({ error: '补货监控校验失败', code: validated.error }, 400);
+
+    const database = getDatabase(c.env);
+    const monitor = await db.createRestockMonitor(database, validated.value);
+    runAdminBackground(c, db.insertAuditLog(database, c.get('username')!, 'restock_add', `添加补货监控: ${monitor.name} ${monitor.url}`));
+    return c.json({ success: true, monitor });
+  } catch (error) {
+    console.error('[admin] restock add failed:', sanitizeSetupDiagnosticDetail(error));
+    return c.json({ error: '添加失败' }, 500);
+  }
+});
+
+adminRoutes.post('/restock/edit', async (c) => {
+  try {
+    const parsed = await readAdminJsonObject(c);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.body;
+    const id = Number(body.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return c.json({ error: '补货监控 ID 无效' }, 400);
+    }
+
+    const database = getDatabase(c.env);
+    const existing = await db.getRestockMonitor(database, id);
+    if (!existing) return c.json({ error: '补货监控不存在' }, 404);
+
+    const candidate = { ...existing, ...body };
+    const validated = validateRestockMonitorInput(candidate);
+    if (!validated.ok) return c.json({ error: '补货监控校验失败', code: validated.error }, 400);
+
+    const monitor = await db.updateRestockMonitorAndReturn(database, id, validated.value);
+    if (!monitor) return c.json({ error: '补货监控不存在' }, 404);
+    runAdminBackground(c, db.insertAuditLog(database, c.get('username')!, 'restock_edit', `编辑补货监控: ${existing.name} -> ${monitor.name}`));
+    return c.json({ success: true, changed: 1, monitor });
+  } catch (error) {
+    console.error('[admin] restock edit failed:', sanitizeSetupDiagnosticDetail(error));
+    return c.json({ error: '编辑失败' }, 500);
+  }
+});
+
+adminRoutes.post('/restock/visibility', async (c) => {
+  try {
+    const parsed = await readAdminJsonObject(c);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.body;
+    const id = Number(body.id);
+    const hidden = body.hidden;
+    if (!Number.isInteger(id) || id <= 0 || typeof hidden !== 'boolean') {
+      return c.json({ error: '补货监控显隐参数无效' }, 400);
+    }
+    const database = getDatabase(c.env);
+    const changed = await db.updateRestockMonitor(database, id, { hidden });
+    runAdminBackground(c, db.insertAuditLog(database, c.get('username')!, 'restock_visibility', `补货监控 ${id} ${hidden ? '隐藏' : '显示'}`));
+    return c.json({ success: true, changed: changed ? 1 : 0 });
+  } catch (error) {
+    console.error('[admin] restock visibility failed:', sanitizeSetupDiagnosticDetail(error));
+    return c.json({ error: '设置失败' }, 500);
+  }
+});
+
+adminRoutes.post('/restock/enabled', async (c) => {
+  try {
+    const parsed = await readAdminJsonObject(c);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.body;
+    const id = Number(body.id);
+    const enabled = body.enabled;
+    if (!Number.isInteger(id) || id <= 0 || typeof enabled !== 'boolean') {
+      return c.json({ error: '补货监控启停参数无效' }, 400);
+    }
+    const database = getDatabase(c.env);
+    const changed = await db.updateRestockMonitor(database, id, { enabled });
+    runAdminBackground(c, db.insertAuditLog(database, c.get('username')!, 'restock_enabled', `补货监控 ${id} ${enabled ? '启用' : '停用'}`));
+    return c.json({ success: true, changed: changed ? 1 : 0 });
+  } catch (error) {
+    console.error('[admin] restock enabled failed:', sanitizeSetupDiagnosticDetail(error));
+    return c.json({ error: '设置失败' }, 500);
+  }
+});
+
+adminRoutes.post('/restock/reorder', async (c) => {
+  try {
+    const parsed = await readAdminJsonObject(c);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.body;
+    const ids = Array.isArray(body.ids)
+      ? body.ids.map((id: unknown) => Number(id)).filter((id: number) => Number.isInteger(id) && id > 0)
+      : [];
+    if (ids.length === 0) return c.json({ error: '补货监控排序列表不能为空' }, 400);
+    if (new Set(ids).size !== ids.length) return c.json({ error: '补货监控排序列表不能包含重复 ID' }, 400);
+
+    const database = getDatabase(c.env);
+    await db.reorderRestockMonitors(database, ids);
+    runAdminBackground(c, db.insertAuditLog(database, c.get('username')!, 'restock_reorder', `调整补货监控排序: ${ids.join(',')}`));
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('[admin] restock reorder failed:', sanitizeSetupDiagnosticDetail(error));
+    return c.json({ error: '排序失败' }, 400);
+  }
+});
+
+adminRoutes.post('/restock/delete', async (c) => {
+  try {
+    const parsed = await readAdminJsonObject(c);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.body;
+    const database = getDatabase(c.env);
+    const id = Number(body.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return c.json({ error: '补货监控 ID 无效' }, 400);
+    }
+    const existing = await db.getRestockMonitor(database, id);
+    if (!existing) return c.json({ error: '补货监控不存在' }, 404);
+    await db.deleteRestockMonitor(database, id);
+    runAdminBackground(c, db.insertAuditLog(database, c.get('username')!, 'restock_delete', `删除补货监控: ${existing.name} ${existing.url}`));
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('[admin] restock delete failed:', sanitizeSetupDiagnosticDetail(error));
+    return c.json({ error: '删除失败' }, 500);
+  }
+});
+
+adminRoutes.post('/restock/:id/check', async (c) => {
+  try {
+    const id = Number(c.req.param('id'));
+    if (!Number.isInteger(id) || id <= 0) {
+      return c.json({ error: '补货监控 ID 无效' }, 400);
+    }
+    const database = getDatabase(c.env);
+    const monitor = await db.getRestockMonitor(database, id);
+    if (!monitor) return c.json({ error: '补货监控不存在' }, 404);
+    const check = await checkRestockMonitor(monitor);
+    const updated = await db.recordRestockCheck(database, check);
+    runAdminBackground(c, db.insertAuditLog(database, c.get('username')!, 'restock_check', `手动检测补货监控: ${monitor.name}`));
+    return c.json({ success: true, monitor: updated, check });
+  } catch (error) {
+    console.error('[admin] restock check failed:', sanitizeSetupDiagnosticDetail(error));
     return c.json({ error: '检测失败' }, 500);
   }
 });
