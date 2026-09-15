@@ -178,7 +178,7 @@ export const SETTING_SCHEMA = {
     type: 'enum',
     defaultValue: 'telegram',
     public: false,
-    values: ['telegram', 'email', 'webhook', 'none'],
+    values: ['telegram', 'email', 'webhook', 'all', 'none'],
   },
   telegram_bot_token: {
     type: 'string',

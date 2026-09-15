@@ -168,12 +168,25 @@ async function dispatchTelegram(
     return false;
   }
   try {
-    const response = await (deps.sendTelegram || sendTelegramMessage)(botToken, {
+    const payload: Parameters<typeof sendTelegramMessage>[1] = {
       chat_id: chatId,
       text: formatTelegramHtmlText(notification.body),
       parse_mode: 'HTML',
-      disable_web_page_preview: true,
-    });
+      disable_web_page_preview: !notification.url,
+    };
+    if (notification.url && /^https?:\/\//i.test(notification.url)) {
+      payload.reply_markup = {
+        inline_keyboard: [
+          [
+            {
+              text: '🛒 立即前往购买',
+              url: notification.url,
+            },
+          ],
+        ],
+      };
+    }
+    const response = await (deps.sendTelegram || sendTelegramMessage)(botToken, payload);
     if (response.body) await response.body.cancel().catch(() => undefined);
     if (!response.ok) {
       await record(deps, database, 'telegram', 'error', `Telegram HTTP ${response.status}`, {
@@ -275,6 +288,66 @@ async function dispatchWebhook(
   return false;
 }
 
+export function getConfiguredNotificationChannels(
+  settings: NotificationSettings,
+): ('telegram' | 'webhook' | 'email')[] {
+  const channels: ('telegram' | 'webhook' | 'email')[] = [];
+  if (settings.telegram_bot_token && settings.telegram_bot_token.trim() !== '' &&
+      settings.telegram_chat_id && settings.telegram_chat_id.trim() !== '') {
+    channels.push('telegram');
+  }
+  if (settings.webhook_url && settings.webhook_url.trim() !== '') {
+    channels.push('webhook');
+  }
+  if (settings.email_smtp_host && settings.email_smtp_host.trim() !== '' &&
+      ((settings.email_smtp_recipients && settings.email_smtp_recipients.trim() !== '') ||
+       (settings.email_smtp_from_address && settings.email_smtp_from_address.trim() !== ''))) {
+    channels.push('email');
+  }
+  return channels;
+}
+
+export async function dispatchToAllConfiguredChannels(
+  database: db.QueryDatabase | undefined,
+  settings: NotificationSettings,
+  notification: NotificationMessage,
+  options: DispatchOptions = {},
+): Promise<{ anySent: boolean; results: Record<string, boolean>; configured: ('telegram' | 'webhook' | 'email')[] }> {
+  const deps = options.deps || {};
+  let configured = getConfiguredNotificationChannels(settings);
+
+  // 如果没有检测到具体凭据字段，但配置了特定单渠道，回退使用该渠道
+  if (configured.length === 0 && settings.notification_method && settings.notification_method !== 'none' && settings.notification_method !== 'all') {
+    configured = [settings.notification_method as 'telegram' | 'webhook' | 'email'];
+  }
+
+  if (configured.length === 0) {
+    await record(deps, database, 'notification', 'disabled', '未配置任何可用的通知渠道');
+    return { anySent: false, results: {}, configured: [] };
+  }
+
+  const results: Record<string, boolean> = {};
+  await Promise.allSettled(
+    configured.map(async (channel) => {
+      try {
+        if (channel === 'telegram') {
+          results.telegram = await dispatchTelegram(database, settings, notification, deps, options.auditUser);
+        } else if (channel === 'webhook') {
+          results.webhook = await dispatchWebhook(database, settings, notification, deps, options.auditUser);
+        } else if (channel === 'email') {
+          results.email = await dispatchEmail(database, settings, notification, deps, options.auditUser);
+        }
+      } catch (err) {
+        if (err instanceof ScheduledBudgetExceeded) throw err;
+        results[channel] = false;
+      }
+    }),
+  );
+
+  const anySent = Object.values(results).some(Boolean);
+  return { anySent, results, configured };
+}
+
 export async function dispatchNotification(
   database: db.QueryDatabase | undefined,
   settings: NotificationSettings,
@@ -292,7 +365,14 @@ export async function dispatchNotification(
     case 'webhook':
       return dispatchWebhook(database, settings, notification, deps, options.auditUser);
     case 'telegram':
+      return dispatchTelegram(database, settings, notification, deps, options.auditUser);
+    case 'all':
+      return (await dispatchToAllConfiguredChannels(database, settings, notification, options)).anySent;
     default:
+      if (channel === 'all' || settings.notification_method === 'all') {
+        return (await dispatchToAllConfiguredChannels(database, settings, notification, options)).anySent;
+      }
       return dispatchTelegram(database, settings, notification, deps, options.auditUser);
   }
 }
+

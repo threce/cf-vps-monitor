@@ -303,9 +303,12 @@ export function shouldNotifyRestock(
 ): boolean {
   if (!notifyEnabled) return false;
   if (newStatus !== 'in_stock') return false;
+  // 如果从未发送过通知（lastNotifiedAt 为空），当前为有货状态，应发送通知
+  if (!lastNotifiedAt) return true;
+  // 如果之前也是有货状态，且已通知过，不重复通知
   if (oldStatus === 'in_stock') return false;
-  // 避免重复通知：如果上次通知时间和状态变更时间相同，说明已通知过
-  if (lastNotifiedAt && statusChangedAt && lastNotifiedAt >= statusChangedAt) return false;
+  // 避免重复通知：如果上次通知时间不早于状态变更时间，说明已通知过当前补货周期
+  if (statusChangedAt && lastNotifiedAt >= statusChangedAt) return false;
   return true;
 }
 

@@ -30,14 +30,15 @@ import { getCloudflareClientIp } from '../utils/request-ip';
 import { validatePingTaskInput } from '../utils/ping-task';
 import { generateAgentToken, validateClientCreateInput, validateClientUpdateInput } from '../utils/client';
 import { validateExpiryNotificationInput, validateLoadNotificationInput, validateOfflineNotificationInput } from '../utils/notification';
-import { NOTIFICATION_DISPATCH_SETTING_KEYS, dispatchNotification, pickNotificationSettingOverrides } from '../utils/notification-dispatch';
+import { NOTIFICATION_DISPATCH_SETTING_KEYS, dispatchNotification, dispatchToAllConfiguredChannels, pickNotificationSettingOverrides } from '../utils/notification-dispatch';
 import { maskSecretPreview, isMaskedSecretPreview } from '../utils/secret-preview';
 import { TELEGRAM_MESSAGE_MAX_CHARS } from '../utils/telegram';
 import { EMAIL_MESSAGE_MAX_CHARS } from '../utils/email';
 import { WEBHOOK_MESSAGE_MAX_CHARS } from '../utils/webhook';
 import { sanitizeSetupDiagnosticDetail } from '../utils/setup-diagnostics';
 import { checkWebsiteMonitorHttp, validateWebsiteMonitorInput } from '../utils/website-monitor';
-import { checkRestockMonitor, validateRestockMonitorInput } from '../utils/restock-monitor';
+import { checkRestockMonitor, shouldNotifyRestock, validateRestockMonitorInput } from '../utils/restock-monitor';
+import { buildRestockNotification } from '../utils/notification-templates';
 import { readLiveSnapshot, readRateLimitResult } from '../utils/do-response';
 import { readJsonWithLimit, readRequestBytesWithLimit } from '../utils/request-body';
 import { bytesToBase64 } from '../utils/theme-package';
@@ -2365,11 +2366,88 @@ adminRoutes.post('/restock/:id/check', async (c) => {
     if (!monitor) return c.json({ error: '补货监控不存在' }, 404);
     const check = await checkRestockMonitor(monitor);
     const updated = await db.recordRestockCheck(database, check);
+    let notified = false;
+
+    // 手动检测如果检测到有货且开启了补货通知，或者触发了状态变更通知
+    if (updated && (shouldNotifyRestock(
+      monitor.status,
+      updated.status,
+      updated.notify_on_restock,
+      updated.last_notified_at,
+      updated.status_changed_at,
+    ) || (check.in_stock && updated.notify_on_restock && !updated.last_notified_at))) {
+      const adminSettings = await db.getSettingsByKeys(database, [...NOTIFICATION_DISPATCH_SETTING_KEYS]);
+      const now = new Date();
+      notified = await dispatchNotification(database, adminSettings, buildRestockNotification({
+        name: updated.name,
+        url: updated.url,
+        matchedText: updated.last_matched_text,
+        eventTime: now,
+      }), {
+        channel: 'all',
+        auditUser: c.get('username') || 'system',
+        deps: { recordHealth: bestEffortRecordHealthEvent },
+      });
+      if (notified) {
+        await db.markRestockMonitorNotified(database, updated.id, now.toISOString());
+        runAdminBackground(c, db.insertAuditLog(database, c.get('username')!, 'restock_alert', `手动检测触发补货通知: ${updated.name}`));
+      }
+    }
+
     runAdminBackground(c, db.insertAuditLog(database, c.get('username')!, 'restock_check', `手动检测补货监控: ${monitor.name}`));
-    return c.json({ success: true, monitor: updated, check });
+    return c.json({ success: true, monitor: updated, check, notified });
   } catch (error) {
     console.error('[admin] restock check failed:', sanitizeSetupDiagnosticDetail(error));
     return c.json({ error: '检测失败' }, 500);
+  }
+});
+
+adminRoutes.post('/restock/:id/test-notify', async (c) => {
+  try {
+    const id = Number(c.req.param('id'));
+    if (!Number.isInteger(id) || id <= 0) {
+      return c.json({ error: '补货监控 ID 无效' }, 400);
+    }
+    const database = getDatabase(c.env);
+    const monitor = await db.getRestockMonitor(database, id);
+    if (!monitor) return c.json({ error: '补货监控不存在' }, 404);
+
+    const adminSettings = await db.getSettingsByKeys(database, [...NOTIFICATION_DISPATCH_SETTING_KEYS]);
+    const now = new Date();
+    const notification = buildRestockNotification({
+      name: monitor.name,
+      url: monitor.url,
+      matchedText: monitor.last_matched_text || '测试补货匹配 (Add to Cart)',
+      eventTime: now,
+    });
+    notification.subject = `[测试] ${notification.subject}`;
+
+    const { anySent, results, configured } = await dispatchToAllConfiguredChannels(
+      database,
+      adminSettings,
+      notification,
+      {
+        auditUser: c.get('username') || 'system',
+        deps: { recordHealth: bestEffortRecordHealthEvent },
+      },
+    );
+
+    runAdminBackground(c, db.insertAuditLog(
+      database,
+      c.get('username')!,
+      'restock_test_notify',
+      `测试补货通知: ${monitor.name} 结果: ${JSON.stringify(results)}`,
+    ));
+
+    return c.json({
+      success: anySent,
+      results,
+      configured,
+      message: anySent ? '测试补货通知已发送至所有配置的渠道' : '未发送成功，请检查通知配置',
+    });
+  } catch (error) {
+    console.error('[admin] restock test notify failed:', sanitizeSetupDiagnosticDetail(error));
+    return c.json({ error: '测试发送失败' }, 500);
   }
 });
 
@@ -3389,7 +3467,7 @@ adminRoutes.post('/test/sendMessage', async (c) => {
     const overrides = pickNotificationSettingOverrides(body.settings);
     const adminSettings = buildAdminSettings({ ...storedSettings, ...overrides });
     selectedChannel = requestedChannel || adminSettings.notification_method;
-    if (!['telegram', 'email', 'webhook', 'none'].includes(selectedChannel)) {
+    if (!['telegram', 'email', 'webhook', 'all', 'none'].includes(selectedChannel)) {
       return c.json({ error: '未知通知方式' }, 400);
     }
     const maxMessageChars = selectedChannel === 'email'

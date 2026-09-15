@@ -545,12 +545,14 @@ async function sendNotification(
   delivery: { key: string; eventId: string; repeatMs?: number },
   now: Date,
   onDelivered?: (token: string) => Promise<boolean>,
+  channelOverride?: string,
 ): Promise<boolean> {
   const settings = await context.getAdminSettings();
   const send = () => dispatchNotification(context.database, settings, notification, {
+    channel: channelOverride,
     deps: { recordHealth: bestEffortRecordHealthEvent },
   });
-  if (settings.notification_method === 'none') return send();
+  if (channelOverride !== 'all' && settings.notification_method === 'none') return send();
   const time = now.toISOString();
   const repeatMs = delivery.repeatMs ?? 0;
   return deliverNotification({
@@ -979,7 +981,7 @@ async function runRestockMonitorChecks(context: ScheduledRunContext, now: Date):
         url: updated.url,
         matchedText: updated.last_matched_text,
         eventTime: now,
-      }), { key: `restock:${updated.id}`, eventId: `restock:${updated.last_in_stock_at}` }, now);
+      }), { key: `restock:${updated.id}`, eventId: `restock:${updated.last_in_stock_at || now.toISOString()}` }, now, undefined, 'all');
       if (!sent) continue;
       if (!(await db.markRestockMonitorNotified(context.database, updated.id, now.toISOString()))) continue;
       await db.insertAuditLog(context.database, 'system', 'restock_alert', `${sent ? '已发送' : '已记录'}补货通知: ${updated.name}`);
@@ -994,7 +996,7 @@ async function runRestockMonitorChecks(context: ScheduledRunContext, now: Date):
         name: updated.name,
         url: updated.url,
         eventTime: now,
-      }), { key: `restock:${updated.id}`, eventId: `out_of_stock:${updated.last_out_of_stock_at}` }, now);
+      }), { key: `restock:${updated.id}`, eventId: `out_of_stock:${updated.last_out_of_stock_at || now.toISOString()}` }, now, undefined, 'all');
       if (!sent) continue;
       if (!(await db.markRestockMonitorNotified(context.database, updated.id, now.toISOString()))) continue;
       await db.insertAuditLog(context.database, 'system', 'out_of_stock_alert', `${sent ? '已发送' : '已记录'}缺货通知: ${updated.name}`);

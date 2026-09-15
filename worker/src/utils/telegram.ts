@@ -8,6 +8,9 @@ type TelegramSendMessagePayload = {
   text: string;
   parse_mode: 'HTML';
   disable_web_page_preview?: boolean;
+  reply_markup?: {
+    inline_keyboard: Array<Array<{ text: string; url: string }>>;
+  };
 };
 
 export function escapeTelegramHtml(value: unknown): string {

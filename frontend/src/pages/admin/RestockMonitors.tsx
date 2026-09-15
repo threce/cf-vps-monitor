@@ -47,6 +47,7 @@ import {
   Power,
   RefreshCw,
   Search,
+  Send,
   ShoppingCart,
   Trash2,
   XCircle,
@@ -189,8 +190,10 @@ interface SortableRestockRowProps {
   selected: boolean;
   dragDisabled: boolean;
   checking: boolean;
+  testingNotify: boolean;
   onSelect: (id: number) => void;
   onCheck: (monitor: RestockMonitor) => void;
+  onTestNotify: (monitor: RestockMonitor) => void;
   onHistory: (monitor: RestockMonitor) => void;
   onVisibility: (monitor: RestockMonitor, hidden: boolean) => void;
   onEnabled: (monitor: RestockMonitor, enabled: boolean) => void;
@@ -203,8 +206,10 @@ function SortableRestockRow({
   selected,
   dragDisabled,
   checking,
+  testingNotify,
   onSelect,
   onCheck,
+  onTestNotify,
   onHistory,
   onVisibility,
   onEnabled,
@@ -298,6 +303,10 @@ function SortableRestockRow({
             <RefreshCw size={12} className={checking ? 'animate-spin' : ''} />
             检测
           </Button>
+          <Button size="1" variant="soft" color="violet" disabled={testingNotify} onClick={() => onTestNotify(monitor)}>
+            <Send size={12} className={testingNotify ? 'animate-spin' : ''} />
+            测试通知
+          </Button>
           <Button size="1" variant="soft" onClick={() => onHistory(monitor)}>
             <History size={12} />
             记录
@@ -329,6 +338,7 @@ export default function RestockMonitors() {
   const [monitors, setMonitors] = useState<RestockMonitor[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkingIds, setCheckingIds] = useState<Set<number>>(new Set());
+  const [testingNotifyIds, setTestingNotifyIds] = useState<Set<number>>(new Set());
 
   // Search & Filter
   const [search, setSearch] = useState('');
@@ -412,11 +422,12 @@ export default function RestockMonitors() {
         success?: boolean;
         monitor?: RestockMonitor;
         check?: RestockCheck;
+        notified?: boolean;
       };
       if (res.monitor) {
         setMonitors(prev => prev.map(m => (m.id === monitor.id ? res.monitor! : m)));
         if (res.monitor.status === 'in_stock') {
-          toast.success(`🎉 【${monitor.name}】检测到有货！`, {
+          toast.success(`🎉 【${monitor.name}】检测到有货！${res.notified ? '（已向所有渠道发送补货通知）' : ''}`, {
             description: res.monitor.last_matched_text ? `匹配: ${res.monitor.last_matched_text}` : undefined,
           });
         } else if (res.monitor.status === 'out_of_stock') {
@@ -429,6 +440,39 @@ export default function RestockMonitors() {
       toast.error(error instanceof Error ? error.message : '手动检测失败');
     } finally {
       setCheckingIds(prev => {
+        const next = new Set(prev);
+        next.delete(monitor.id);
+        return next;
+      });
+    }
+  };
+
+  const handleTestNotify = async (monitor: RestockMonitor) => {
+    setTestingNotifyIds(prev => new Set(prev).add(monitor.id));
+    try {
+      const res = await apiFetch(`/admin/restock/${monitor.id}/test-notify`, {
+        method: 'POST',
+        body: '{}',
+      }) as {
+        success?: boolean;
+        results?: Record<string, boolean>;
+        configured?: string[];
+        message?: string;
+      };
+      if (res.success) {
+        const channelNames = Object.entries(res.results || {})
+          .map(([ch, ok]) => `${ch === 'telegram' ? 'Telegram' : ch === 'webhook' ? 'Webhook/钉钉' : '邮件'}: ${ok ? '成功' : '失败'}`)
+          .join('，');
+        toast.success(`🎉 测试补货通知已发送！`, {
+          description: channelNames || '已同时通知所有已配置渠道（附带购买直达链接）',
+        });
+      } else {
+        toast.error(res.message || '测试通知发送失败，请检查通知配置');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '测试通知发送失败');
+    } finally {
+      setTestingNotifyIds(prev => {
         const next = new Set(prev);
         next.delete(monitor.id);
         return next;
@@ -833,8 +877,10 @@ export default function RestockMonitors() {
                     selected={selectedIds.has(monitor.id)}
                     dragDisabled={sortKey !== 'manual'}
                     checking={checkingIds.has(monitor.id)}
+                    testingNotify={testingNotifyIds.has(monitor.id)}
                     onSelect={handleSelectOne}
                     onCheck={handleCheck}
+                    onTestNotify={handleTestNotify}
                     onHistory={handleHistory}
                     onVisibility={handleVisibility}
                     onEnabled={handleEnabled}

@@ -121,9 +121,9 @@ export default function AdminNotifications() {
   const clientsLoadPromiseRef = useRef<Promise<NotificationClient[]> | null>(null);
 
   const syncChannelCards = useCallback((method: string) => {
-    setSmtpOpen(method === 'email');
-    setTelegramOpen(method === 'telegram');
-    setWebhookOpen(method === 'webhook');
+    setSmtpOpen(method === 'email' || method === 'all');
+    setTelegramOpen(method === 'telegram' || method === 'all');
+    setWebhookOpen(method === 'webhook' || method === 'all');
   }, []);
 
   // Offline tab state
@@ -698,20 +698,24 @@ export default function AdminNotifications() {
       : webhookFormat === 'custom'
         ? '自定义模式可留空'
         : '当前平台通常不需要 Secret';
-  const notificationMethodLabel = notificationMethod === 'email'
-    ? 'SMTP 邮件'
-    : notificationMethod === 'webhook'
-      ? 'Webhook'
-      : notificationMethod === 'none'
-        ? '关闭'
-        : 'Telegram';
-  const notificationMethodBadgeColor = notificationMethod === 'email'
-    ? 'blue'
-    : notificationMethod === 'webhook'
-      ? 'amber'
-      : notificationMethod === 'none'
-        ? 'gray'
-        : 'green';
+  const notificationMethodLabel = notificationMethod === 'all'
+    ? '所有已配置渠道'
+    : notificationMethod === 'email'
+      ? 'SMTP 邮件'
+      : notificationMethod === 'webhook'
+        ? 'Webhook'
+        : notificationMethod === 'none'
+          ? '关闭'
+          : 'Telegram';
+  const notificationMethodBadgeColor = notificationMethod === 'all'
+    ? 'purple'
+    : notificationMethod === 'email'
+      ? 'blue'
+      : notificationMethod === 'webhook'
+        ? 'amber'
+        : notificationMethod === 'none'
+          ? 'gray'
+          : 'green';
   const showClientSearch = activeTab === 'offline' || activeTab === 'expiry';
   const headerAction = activeTab === 'settings' ? (
     <Button onClick={saveNotificationSettings} disabled={settingsSaving || tabLoading.settings}>
@@ -801,6 +805,7 @@ export default function AdminNotifications() {
                         <Select.Trigger className="notification-method-select" />
                         <Select.Content>
                           <Select.Item value="none">关闭</Select.Item>
+                          <Select.Item value="all">所有已配置渠道 (同时发送)</Select.Item>
                           <Select.Item value="telegram">Telegram</Select.Item>
                           <Select.Item value="email">SMTP 邮件</Select.Item>
                           <Select.Item value="webhook">Webhook</Select.Item>

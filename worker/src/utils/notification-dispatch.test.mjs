@@ -145,3 +145,45 @@ console.log('notification-dispatch tests passed');
 }
 
 console.log('notification-dispatch mask tests passed');
+
+// ── Multi-channel dispatch tests ──
+{
+  const { getConfiguredNotificationChannels, dispatchToAllConfiguredChannels } = await import('./notification-dispatch.ts');
+  const testSettings = {
+    telegram_bot_token: 'bot123',
+    telegram_chat_id: 'chat123',
+    webhook_url: 'https://oapi.dingtalk.com/robot/send?access_token=123',
+    webhook_format: 'dingtalk',
+    email_smtp_host: 'smtp.example.com',
+    email_smtp_recipients: 'user@example.com',
+  };
+
+  const configured = getConfiguredNotificationChannels(testSettings);
+  assert.deepEqual(configured, ['telegram', 'webhook', 'email']);
+
+  let tgCalled = false;
+  let whCalled = false;
+  let mailCalled = false;
+
+  const res = await dispatchToAllConfiguredChannels(undefined, testSettings, {
+    subject: '补货通知',
+    body: '有货啦',
+    url: 'https://example.com/buy',
+  }, {
+    deps: {
+      sendTelegram: async () => { tgCalled = true; return new Response('{}', { status: 200 }); },
+      sendWebhook: async () => { whCalled = true; return { ok: true, status: 200, host: 'oapi.dingtalk.com' }; },
+      sendEmail: async () => { mailCalled = true; return { ok: true }; },
+    },
+  });
+
+  assert.equal(res.anySent, true);
+  assert.equal(tgCalled, true);
+  assert.equal(whCalled, true);
+  assert.equal(mailCalled, true);
+  assert.equal(res.results.telegram, true);
+  assert.equal(res.results.webhook, true);
+  assert.equal(res.results.email, true);
+}
+
+console.log('notification-dispatch multi-channel tests passed');

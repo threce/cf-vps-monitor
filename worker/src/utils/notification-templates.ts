@@ -1,6 +1,7 @@
 export type NotificationMessage = {
   subject: string;
   body: string;
+  url?: string;
   event?: string;
   clients?: string;
   message?: string;
@@ -177,17 +178,26 @@ export function buildRestockNotification(input: {
   matchedText: string | null;
   eventTime?: string | Date;
 }): NotificationMessage {
-  return eventMessage({
-    emoji: '🛒',
+  const time = formatNotificationTime(input.eventTime || new Date());
+  const subject = `🛒 VPS 补货提醒: ${input.name}`;
+  const lines = [
+    `🛒🛒🛒 VPS 补货提醒`,
+    `商品名称: ${input.name}`,
+    `当前状态: ✅ 已检测到补货 (${input.matchedText ? `匹配: ${input.matchedText}` : '检测到有货'})`,
+    `直达购买: ${input.url}`,
+    `检测时间: ${time}`,
+    `💡 特价商品库存有限，请尽快点击链接或按钮前往抢购！`,
+  ];
+  return {
+    subject,
+    body: lines.join('\n'),
+    url: input.url,
     event: 'VPS 补货通知',
     clients: input.name,
-    message: [
-      input.url,
-      input.matchedText ? `匹配: ${input.matchedText}` : '检测到有货',
-      '请尽快抢购！',
-    ].join('；'),
-    time: input.eventTime,
-  });
+    message: `已检测到补货！购买链接: ${input.url}`,
+    time,
+    emoji: '🛒',
+  };
 }
 
 export function buildOutOfStockNotification(input: {
@@ -195,11 +205,23 @@ export function buildOutOfStockNotification(input: {
   url: string;
   eventTime?: string | Date;
 }): NotificationMessage {
-  return eventMessage({
-    emoji: '📦',
+  const time = formatNotificationTime(input.eventTime || new Date());
+  const subject = `📦 VPS 缺货通知: ${input.name}`;
+  const lines = [
+    `📦📦📦 VPS 缺货通知`,
+    `商品名称: ${input.name}`,
+    `当前状态: ❌ 已售罄或下架`,
+    `商品链接: ${input.url}`,
+    `检测时间: ${time}`,
+  ];
+  return {
+    subject,
+    body: lines.join('\n'),
+    url: input.url,
     event: 'VPS 缺货通知',
     clients: input.name,
-    message: `${input.url}；已售罄或下架`,
-    time: input.eventTime,
-  });
+    message: `${input.name} 已售罄或下架`,
+    time,
+    emoji: '📦',
+  };
 }
