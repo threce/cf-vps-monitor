@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Badge, Box, Button, Card, Flex, Grid, Text, TextField } from '@radix-ui/themes';
-import { CheckCircle2, ExternalLink, RefreshCw, Search, ShoppingCart, XCircle, Clock } from 'lucide-react';
+import { CheckCircle2, ExternalLink, RefreshCw, Search, ShoppingCart, Tag, XCircle, Clock } from 'lucide-react';
 
 export interface PublicRestockMonitor {
   id: number;
   name: string;
   url: string;
+  tags?: string[];
   status: 'unknown' | 'in_stock' | 'out_of_stock' | 'error';
   last_checked_at: string | null;
   last_in_stock_at: string | null;
@@ -36,12 +37,28 @@ function formatExactTime(dateStr: string | null) {
 
 export default function PublicRestockList({ monitors, loading, onRefresh }: PublicRestockListProps) {
   const [search, setSearch] = useState('');
+  const [selectedTag, setSelectedTag] = useState<string>('all');
 
-  const filtered = monitors.filter(m => {
-    if (!search.trim()) return true;
-    const q = search.trim().toLowerCase();
-    return m.name.toLowerCase().includes(q) || m.url.toLowerCase().includes(q);
-  });
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    monitors.forEach(m => (m.tags || []).forEach(t => set.add(t)));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  }, [monitors]);
+
+  const filtered = useMemo(() => {
+    return monitors.filter(m => {
+      if (selectedTag !== 'all' && !(m.tags || []).includes(selectedTag)) {
+        return false;
+      }
+      if (!search.trim()) return true;
+      const q = search.trim().toLowerCase();
+      return (
+        m.name.toLowerCase().includes(q) ||
+        m.url.toLowerCase().includes(q) ||
+        (m.tags || []).some(t => t.toLowerCase().includes(q))
+      );
+    });
+  }, [monitors, search, selectedTag]);
 
   const inStockCount = monitors.filter(m => m.status === 'in_stock').length;
   const outOfStockCount = monitors.filter(m => m.status === 'out_of_stock').length;
@@ -77,7 +94,7 @@ export default function PublicRestockList({ monitors, loading, onRefresh }: Publ
       {/* 搜索框 */}
       <Card className="p-3">
         <TextField.Root
-          placeholder="搜索 VPS 方案名称或网址..."
+          placeholder="搜索 VPS 方案名称、网址或标签..."
           value={search}
           onChange={e => setSearch(e.target.value)}
           size="2"
@@ -87,6 +104,41 @@ export default function PublicRestockList({ monitors, loading, onRefresh }: Publ
           </TextField.Slot>
         </TextField.Root>
       </Card>
+
+      {/* 分类标签导航 */}
+      {allTags.length > 0 && (
+        <Flex gap="2" wrap="wrap" align="center" className="px-1">
+          <Flex align="center" gap="1" className="text-gray-400 mr-1">
+            <Tag size={13} />
+            <Text size="1" color="gray" weight="medium">分类:</Text>
+          </Flex>
+          <Badge
+            size="2"
+            variant={selectedTag === 'all' ? 'solid' : 'soft'}
+            color={selectedTag === 'all' ? 'blue' : 'gray'}
+            className="cursor-pointer select-none transition-all hover:opacity-85"
+            onClick={() => setSelectedTag('all')}
+          >
+            全部 ({monitors.length})
+          </Badge>
+          {allTags.map(tag => {
+            const count = monitors.filter(m => (m.tags || []).includes(tag)).length;
+            const isSelected = selectedTag === tag;
+            return (
+              <Badge
+                key={tag}
+                size="2"
+                variant={isSelected ? 'solid' : 'surface'}
+                color={isSelected ? 'indigo' : 'gray'}
+                className="cursor-pointer select-none transition-all hover:opacity-85"
+                onClick={() => setSelectedTag(prev => prev === tag ? 'all' : tag)}
+              >
+                #{tag} ({count})
+              </Badge>
+            );
+          })}
+        </Flex>
+      )}
 
       {/* 监控卡片网格 */}
       <Grid columns={{ initial: '1', sm: '2', md: '3' }} gap="4">
@@ -126,6 +178,26 @@ export default function PublicRestockList({ monitors, loading, onRefresh }: Publ
                       </Badge>
                     )}
                   </Flex>
+
+                  {monitor.tags && monitor.tags.length > 0 && (
+                    <Flex gap="1" wrap="wrap" className="mb-2">
+                      {monitor.tags.map(tag => (
+                        <Badge
+                          key={tag}
+                          variant={selectedTag === tag ? 'solid' : 'surface'}
+                          color="indigo"
+                          size="1"
+                          className="cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setSelectedTag(prev => prev === tag ? 'all' : tag);
+                          }}
+                        >
+                          #{tag}
+                        </Badge>
+                      ))}
+                    </Flex>
+                  )}
 
                   <Text size="1" color="gray" className="block line-clamp-1 mb-3" title={monitor.url}>
                     {monitor.url}

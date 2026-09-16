@@ -254,6 +254,7 @@ create table if not exists restock_monitors (
   notify_on_restock boolean not null default true,
   notify_on_out_of_stock boolean not null default false,
   sort_order integer not null default 0,
+  tags jsonb not null default '[]'::jsonb,
   status text not null default 'unknown',
   last_checked_at timestamptz,
   last_in_stock_at timestamptz,
@@ -271,6 +272,8 @@ create table if not exists restock_monitors (
   constraint restock_monitors_timeout_check check (timeout_sec between 1 and 30),
   constraint restock_monitors_status_check check (status in ('unknown', 'in_stock', 'out_of_stock', 'error'))
 );
+
+alter table if exists restock_monitors add column if not exists tags jsonb not null default '[]'::jsonb;
 
 create table if not exists restock_checks (
   id bigint generated always as identity primary key,

@@ -2381,6 +2381,7 @@ adminRoutes.post('/restock/:id/check', async (c) => {
       notified = await dispatchNotification(database, adminSettings, buildRestockNotification({
         name: updated.name,
         url: updated.url,
+        tags: updated.tags,
         matchedText: updated.last_matched_text,
         eventTime: now,
       }), {
@@ -2417,6 +2418,7 @@ adminRoutes.post('/restock/:id/test-notify', async (c) => {
     const notification = buildRestockNotification({
       name: monitor.name,
       url: monitor.url,
+      tags: monitor.tags,
       matchedText: monitor.last_matched_text || '测试补货匹配 (Add to Cart)',
       eventTime: now,
     });

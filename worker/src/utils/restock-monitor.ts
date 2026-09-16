@@ -13,6 +13,7 @@ import type { RestockCheckMode, RestockMonitorInput } from '../db/types.ts';
 export interface RestockProbeMonitor {
   id: number;
   url: string;
+  tags?: string[];
   check_mode: RestockCheckMode;
   stock_keywords: string[];
   out_of_stock_keywords: string[];
@@ -105,6 +106,7 @@ export function validateRestockMonitorInput(input: Record<string, unknown>): Res
   const stock_keywords = readStringArray(input.stock_keywords);
   const out_of_stock_keywords = readStringArray(input.out_of_stock_keywords);
   const stock_pattern = String(input.stock_pattern || '').trim().slice(0, 2000);
+  const tags = readStringArray(input.tags);
 
   if (checkMode === 'keyword' && stock_keywords.length === 0 && out_of_stock_keywords.length === 0) {
     return { ok: false, error: 'no_keywords' };
@@ -134,6 +136,7 @@ export function validateRestockMonitorInput(input: Record<string, unknown>): Res
     value: {
       name,
       url: parsed.toString(),
+      tags,
       check_mode: checkMode,
       stock_keywords,
       out_of_stock_keywords,

@@ -10,6 +10,7 @@ test('validateRestockMonitorInput validates name and URL', () => {
   const valid = validateRestockMonitorInput({
     name: 'RackNerd 2024 Black Friday 1C1G',
     url: 'https://my.racknerd.com/cart.php?a=add&pid=123',
+    tags: ['RackNerd', '美国西海岸', '黑五特价'],
     check_mode: 'keyword',
     stock_keywords: ['Add to Cart', 'In Stock'],
     out_of_stock_keywords: ['Out of Stock'],
@@ -18,6 +19,7 @@ test('validateRestockMonitorInput validates name and URL', () => {
   if (valid.ok) {
     assert.equal(valid.value.name, 'RackNerd 2024 Black Friday 1C1G');
     assert.equal(valid.value.url, 'https://my.racknerd.com/cart.php?a=add&pid=123');
+    assert.deepEqual(valid.value.tags, ['RackNerd', '美国西海岸', '黑五特价']);
     assert.equal(valid.value.check_mode, 'keyword');
     assert.deepEqual(valid.value.stock_keywords, ['Add to Cart', 'In Stock']);
     assert.deepEqual(valid.value.out_of_stock_keywords, ['Out of Stock']);

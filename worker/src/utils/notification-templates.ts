@@ -175,14 +175,19 @@ export function buildIpChangeNotification(input: {
 export function buildRestockNotification(input: {
   name: string;
   url: string;
+  tags?: string[];
   matchedText: string | null;
   eventTime?: string | Date;
 }): NotificationMessage {
   const time = formatNotificationTime(input.eventTime || new Date());
   const subject = `🛒 VPS 补货提醒: ${input.name}`;
+  const tagsLine = input.tags && input.tags.length > 0
+    ? `分类标签: ${input.tags.map(t => `#${t}`).join(' ')}`
+    : null;
   const lines = [
     `🛒🛒🛒 VPS 补货提醒`,
     `商品名称: ${input.name}`,
+    ...(tagsLine ? [tagsLine] : []),
     `当前状态: ✅ 已检测到补货 (${input.matchedText ? `匹配: ${input.matchedText}` : '检测到有货'})`,
     `直达购买: ${input.url}`,
     `检测时间: ${time}`,
@@ -203,13 +208,18 @@ export function buildRestockNotification(input: {
 export function buildOutOfStockNotification(input: {
   name: string;
   url: string;
+  tags?: string[];
   eventTime?: string | Date;
 }): NotificationMessage {
   const time = formatNotificationTime(input.eventTime || new Date());
   const subject = `📦 VPS 缺货通知: ${input.name}`;
+  const tagsLine = input.tags && input.tags.length > 0
+    ? `分类标签: ${input.tags.map(t => `#${t}`).join(' ')}`
+    : null;
   const lines = [
     `📦📦📦 VPS 缺货通知`,
     `商品名称: ${input.name}`,
+    ...(tagsLine ? [tagsLine] : []),
     `当前状态: ❌ 已售罄或下架`,
     `商品链接: ${input.url}`,
     `检测时间: ${time}`,

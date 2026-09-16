@@ -979,6 +979,7 @@ async function runRestockMonitorChecks(context: ScheduledRunContext, now: Date):
       const sent = await sendNotification(context, buildRestockNotification({
         name: updated.name,
         url: updated.url,
+        tags: updated.tags,
         matchedText: updated.last_matched_text,
         eventTime: now,
       }), { key: `restock:${updated.id}`, eventId: `restock:${updated.last_in_stock_at || now.toISOString()}` }, now, undefined, 'all');
@@ -995,6 +996,7 @@ async function runRestockMonitorChecks(context: ScheduledRunContext, now: Date):
       const sent = await sendNotification(context, buildOutOfStockNotification({
         name: updated.name,
         url: updated.url,
+        tags: updated.tags,
         eventTime: now,
       }), { key: `restock:${updated.id}`, eventId: `out_of_stock:${updated.last_out_of_stock_at || now.toISOString()}` }, now, undefined, 'all');
       if (!sent) continue;

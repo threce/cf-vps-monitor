@@ -67,6 +67,7 @@ export interface RestockMonitor {
   id: number;
   name: string;
   url: string;
+  tags?: string[];
   check_mode: RestockCheckMode;
   stock_keywords: string[];
   out_of_stock_keywords: string[];
@@ -106,6 +107,7 @@ export interface RestockCheck {
 interface FormState {
   name: string;
   url: string;
+  tags_text: string;
   check_mode: RestockCheckMode;
   stock_keywords_text: string;
   out_of_stock_keywords_text: string;
@@ -122,6 +124,7 @@ interface FormState {
 const emptyForm: FormState = {
   name: '',
   url: 'https://',
+  tags_text: '',
   check_mode: 'keyword',
   stock_keywords_text: 'Add to Cart, In Stock, 立即购买, 加入购物车',
   out_of_stock_keywords_text: 'Out of Stock, Sold Out, 缺货, 已售罄',
@@ -256,6 +259,15 @@ function SortableRestockRow({
           {monitor.status === 'unknown' && <Clock size={16} className="text-gray-400" />}
           <div>
             <Text weight="bold" size="2">{monitor.name}</Text>
+            {monitor.tags && monitor.tags.length > 0 && (
+              <Flex gap="1" wrap="wrap" className="mt-0.5">
+                {monitor.tags.map(tag => (
+                  <Badge key={tag} variant="surface" color="indigo" size="1">
+                    #{tag}
+                  </Badge>
+                ))}
+              </Flex>
+            )}
             {monitor.last_matched_text && (
               <Text size="1" color="gray" className="block truncate max-w-[200px]" title={monitor.last_matched_text}>
                 匹配: {monitor.last_matched_text}
@@ -342,6 +354,7 @@ export default function RestockMonitors() {
 
   // Search & Filter
   const [search, setSearch] = useState('');
+  const [selectedTag, setSelectedTag] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<RestockStatusFilter>('all');
   const [sortKey, setSortKey] = useState<RestockSortKey>('manual');
 
@@ -392,11 +405,24 @@ export default function RestockMonitors() {
     };
   }, [monitors]);
 
+  const allTags = useMemo(() => {
+    const set = new Set<string>();
+    monitors.forEach(m => (m.tags || []).forEach(t => set.add(t)));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  }, [monitors]);
+
   const filteredMonitors = useMemo(() => {
     let result = [...monitors];
+    if (selectedTag !== 'all') {
+      result = result.filter(m => (m.tags || []).includes(selectedTag));
+    }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      result = result.filter(m => m.name.toLowerCase().includes(q) || m.url.toLowerCase().includes(q));
+      result = result.filter(m =>
+        m.name.toLowerCase().includes(q) ||
+        m.url.toLowerCase().includes(q) ||
+        (m.tags || []).some(t => t.toLowerCase().includes(q))
+      );
     }
     if (statusFilter === 'in_stock') result = result.filter(m => m.status === 'in_stock');
     else if (statusFilter === 'out_of_stock') result = result.filter(m => m.status === 'out_of_stock');
@@ -412,7 +438,7 @@ export default function RestockMonitors() {
       result.sort((a, b) => (b.last_checked_at || '').localeCompare(a.last_checked_at || ''));
     }
     return result;
-  }, [monitors, search, statusFilter, sortKey]);
+  }, [monitors, search, selectedTag, statusFilter, sortKey]);
 
   // Handlers
   const handleCheck = async (monitor: RestockMonitor) => {
@@ -572,6 +598,7 @@ export default function RestockMonitors() {
     setForm({
       name: monitor.name || '',
       url: monitor.url || '',
+      tags_text: (monitor.tags || []).join(', '),
       check_mode: monitor.check_mode || 'keyword',
       stock_keywords_text: (monitor.stock_keywords || []).join(', '),
       out_of_stock_keywords_text: (monitor.out_of_stock_keywords || []).join(', '),
@@ -602,6 +629,7 @@ export default function RestockMonitors() {
     const payload = {
       name: form.name.trim(),
       url: form.url.trim(),
+      tags: parseKeywords(form.tags_text),
       check_mode: form.check_mode,
       stock_keywords: parseKeywords(form.stock_keywords_text),
       out_of_stock_keywords: parseKeywords(form.out_of_stock_keywords_text),
@@ -772,6 +800,25 @@ export default function RestockMonitors() {
               </SegmentedControl.Root>
             </Box>
 
+            {allTags.length > 0 && (
+              <Box>
+                <Select.Root value={selectedTag} onValueChange={setSelectedTag} size="1">
+                  <Select.Trigger placeholder="全部分类标签" />
+                  <Select.Content>
+                    <Select.Item value="all">全部分类 ({monitors.length})</Select.Item>
+                    {allTags.map(tag => {
+                      const count = monitors.filter(m => (m.tags || []).includes(tag)).length;
+                      return (
+                        <Select.Item key={tag} value={tag}>
+                          #{tag} ({count})
+                        </Select.Item>
+                      );
+                    })}
+                  </Select.Content>
+                </Select.Root>
+              </Box>
+            )}
+
             <Flex className="admin-search-cluster" gap="2" align="center">
               <TextField.Root
                 className="admin-server-search"
@@ -923,6 +970,20 @@ export default function RestockMonitors() {
                 value={form.name}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
               />
+            </div>
+
+            <div>
+              <Text as="label" size="2" weight="bold" className="block mb-1">
+                分类标签 (选填，多个可用逗号分隔)
+              </Text>
+              <TextField.Root
+                placeholder="例如: RackNerd, 美国西海岸, 圣何塞, 9.9刀神机"
+                value={form.tags_text}
+                onChange={e => setForm(f => ({ ...f, tags_text: e.target.value }))}
+              />
+              <Text size="1" color="gray" className="mt-1 block">
+                用于按 VPS 商家、机房地区、特价活动等维度进行分类筛选
+              </Text>
             </div>
 
             <div>
