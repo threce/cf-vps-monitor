@@ -201,10 +201,6 @@ export default function PublicRestockList({ monitors, loading, onRefresh }: Publ
                     </Flex>
                   )}
 
-                  <Text size="1" color="gray" className="block line-clamp-1 mb-3" title={monitor.url}>
-                    {monitor.url}
-                  </Text>
-
                   {monitor.remark && (
                     <Box className="bg-violet-50/70 dark:bg-violet-950/20 border border-violet-200/50 dark:border-violet-800/30 p-2 rounded text-xs mb-3 text-violet-700 dark:text-violet-300">
                       <Text weight="bold" size="1" className="mr-1">💡 备注:</Text>
@@ -240,22 +236,36 @@ export default function PublicRestockList({ monitors, loading, onRefresh }: Publ
                 </div>
 
                 <div className="pt-3 border-t border-gray-100 dark:border-gray-800">
-                  <a
-                    href={monitor.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block"
-                  >
-                    <Button
-                      className="w-full cursor-pointer"
-                      variant={isInStock ? 'solid' : 'soft'}
-                      color={isInStock ? 'green' : 'blue'}
-                      size="2"
+                  {isInStock ? (
+                    <a
+                      href={monitor.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block"
                     >
-                      {isInStock ? '🚀 立即抢购' : '前往官网查看'}
-                      <ExternalLink size={13} className="ml-1" />
+                      <Button
+                        className="w-full cursor-pointer font-medium"
+                        variant="solid"
+                        color="green"
+                        size="2"
+                      >
+                        <ShoppingCart size={14} className="mr-1" />
+                        购买
+                        <ExternalLink size={13} className="ml-1" />
+                      </Button>
+                    </a>
+                  ) : (
+                    <Button
+                      className="w-full opacity-60 cursor-not-allowed"
+                      variant="soft"
+                      color="gray"
+                      size="2"
+                      disabled
+                    >
+                      <XCircle size={14} className="mr-1 text-gray-400" />
+                      缺货
                     </Button>
-                  </a>
+                  )}
                 </div>
               </Flex>
             </Card>
