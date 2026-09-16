@@ -5893,6 +5893,7 @@ as $$
     'name', r.name,
     'url', r.url,
     'tags', coalesce(r.tags, '[]'::jsonb),
+    'remark', coalesce(r.remark, ''),
     'status', r.status,
     'last_checked_at', r.last_checked_at,
     'last_in_stock_at', r.last_in_stock_at,
@@ -5918,7 +5919,7 @@ begin
     name, url, check_mode,
     stock_keywords, out_of_stock_keywords, stock_pattern,
     custom_headers, interval_sec, timeout_sec,
-    enabled, hidden, notify_on_restock, notify_on_out_of_stock, sort_order, tags
+    enabled, hidden, notify_on_restock, notify_on_out_of_stock, sort_order, tags, remark
   ) values (
     input_monitor->>'name',
     input_monitor->>'url',
@@ -5934,7 +5935,8 @@ begin
     coalesce((input_monitor->>'notify_on_restock')::boolean, true),
     coalesce((input_monitor->>'notify_on_out_of_stock')::boolean, false),
     (select coalesce(max(sort_order), 0) + 1 from restock_monitors),
-    coalesce(input_monitor->'tags', '[]'::jsonb)
+    coalesce(input_monitor->'tags', '[]'::jsonb),
+    coalesce(input_monitor->>'remark', '')
   ) returning * into created_row;
   return to_jsonb(created_row);
 end;
@@ -5959,6 +5961,7 @@ begin
     stock_pattern = coalesce(input_monitor->>'stock_pattern', stock_pattern),
     custom_headers = coalesce(input_monitor->'custom_headers', custom_headers),
     tags = case when input_monitor ? 'tags' then coalesce(input_monitor->'tags', '[]'::jsonb) else tags end,
+    remark = case when input_monitor ? 'remark' then coalesce(input_monitor->>'remark', '') else remark end,
     interval_sec = coalesce((input_monitor->>'interval_sec')::integer, interval_sec),
     timeout_sec = coalesce((input_monitor->>'timeout_sec')::integer, timeout_sec),
     enabled = coalesce((input_monitor->>'enabled')::boolean, enabled),

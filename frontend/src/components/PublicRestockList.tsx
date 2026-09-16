@@ -7,6 +7,7 @@ export interface PublicRestockMonitor {
   name: string;
   url: string;
   tags?: string[];
+  remark?: string;
   status: 'unknown' | 'in_stock' | 'out_of_stock' | 'error';
   last_checked_at: string | null;
   last_in_stock_at: string | null;
@@ -55,6 +56,7 @@ export default function PublicRestockList({ monitors, loading, onRefresh }: Publ
       return (
         m.name.toLowerCase().includes(q) ||
         m.url.toLowerCase().includes(q) ||
+        (m.remark && m.remark.toLowerCase().includes(q)) ||
         (m.tags || []).some(t => t.toLowerCase().includes(q))
       );
     });
@@ -202,6 +204,13 @@ export default function PublicRestockList({ monitors, loading, onRefresh }: Publ
                   <Text size="1" color="gray" className="block line-clamp-1 mb-3" title={monitor.url}>
                     {monitor.url}
                   </Text>
+
+                  {monitor.remark && (
+                    <Box className="bg-violet-50/70 dark:bg-violet-950/20 border border-violet-200/50 dark:border-violet-800/30 p-2 rounded text-xs mb-3 text-violet-700 dark:text-violet-300">
+                      <Text weight="bold" size="1" className="mr-1">💡 备注:</Text>
+                      <Text size="1">{monitor.remark}</Text>
+                    </Box>
+                  )}
 
                   {monitor.last_matched_text && (
                     <Box className="bg-gray-100/80 dark:bg-gray-800/60 p-2 rounded text-xs mb-3">

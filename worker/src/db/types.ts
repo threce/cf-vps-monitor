@@ -470,6 +470,7 @@ export interface RestockMonitor {
   name: string;
   url: string;
   tags: string[];
+  remark: string;
   check_mode: RestockCheckMode;
   stock_keywords: string[];
   out_of_stock_keywords: string[];
@@ -501,6 +502,7 @@ export type RestockMonitorInput = Pick<
   | 'name'
   | 'url'
   | 'tags'
+  | 'remark'
   | 'check_mode'
   | 'stock_keywords'
   | 'out_of_stock_keywords'
@@ -532,6 +534,7 @@ export interface PublicRestockMonitor {
   name: string;
   url: string;
   tags: string[];
+  remark: string;
   status: RestockMonitorStatus;
   last_checked_at: string | null;
   last_in_stock_at: string | null;

@@ -14,6 +14,7 @@ export interface RestockProbeMonitor {
   id: number;
   url: string;
   tags?: string[];
+  remark?: string;
   check_mode: RestockCheckMode;
   stock_keywords: string[];
   out_of_stock_keywords: string[];
@@ -107,6 +108,7 @@ export function validateRestockMonitorInput(input: Record<string, unknown>): Res
   const out_of_stock_keywords = readStringArray(input.out_of_stock_keywords);
   const stock_pattern = String(input.stock_pattern || '').trim().slice(0, 2000);
   const tags = readStringArray(input.tags);
+  const remark = String(input.remark || '').trim().slice(0, 500);
 
   if (checkMode === 'keyword' && stock_keywords.length === 0 && out_of_stock_keywords.length === 0) {
     return { ok: false, error: 'no_keywords' };
@@ -137,6 +139,7 @@ export function validateRestockMonitorInput(input: Record<string, unknown>): Res
       name,
       url: parsed.toString(),
       tags,
+      remark,
       check_mode: checkMode,
       stock_keywords,
       out_of_stock_keywords,

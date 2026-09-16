@@ -49,7 +49,9 @@ import {
   Search,
   Send,
   ShoppingCart,
+  Tag,
   Trash2,
+  X,
   XCircle,
   AlertTriangle,
   Clock,
@@ -68,6 +70,7 @@ export interface RestockMonitor {
   name: string;
   url: string;
   tags?: string[];
+  remark?: string;
   check_mode: RestockCheckMode;
   stock_keywords: string[];
   out_of_stock_keywords: string[];
@@ -107,7 +110,8 @@ export interface RestockCheck {
 interface FormState {
   name: string;
   url: string;
-  tags_text: string;
+  tags: string[];
+  remark: string;
   check_mode: RestockCheckMode;
   stock_keywords_text: string;
   out_of_stock_keywords_text: string;
@@ -124,7 +128,8 @@ interface FormState {
 const emptyForm: FormState = {
   name: '',
   url: 'https://',
-  tags_text: '',
+  tags: [],
+  remark: '',
   check_mode: 'keyword',
   stock_keywords_text: 'Add to Cart, In Stock, 立即购买, 加入购物车',
   out_of_stock_keywords_text: 'Out of Stock, Sold Out, 缺货, 已售罄',
@@ -268,6 +273,11 @@ function SortableRestockRow({
                 ))}
               </Flex>
             )}
+            {monitor.remark && (
+              <Text size="1" color="violet" className="block truncate max-w-[240px] mt-0.5" title={monitor.remark}>
+                📝 备注: {monitor.remark}
+              </Text>
+            )}
             {monitor.last_matched_text && (
               <Text size="1" color="gray" className="block truncate max-w-[200px]" title={monitor.last_matched_text}>
                 匹配: {monitor.last_matched_text}
@@ -365,6 +375,7 @@ export default function RestockMonitors() {
   const [editOpen, setEditOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
+  const [newTagInput, setNewTagInput] = useState('');
   const [saving, setSaving] = useState(false);
 
   // History Modal
@@ -421,6 +432,7 @@ export default function RestockMonitors() {
       result = result.filter(m =>
         m.name.toLowerCase().includes(q) ||
         m.url.toLowerCase().includes(q) ||
+        (m.remark && m.remark.toLowerCase().includes(q)) ||
         (m.tags || []).some(t => t.toLowerCase().includes(q))
       );
     }
@@ -590,6 +602,7 @@ export default function RestockMonitors() {
   const openAddDialog = () => {
     setEditingId(null);
     setForm(emptyForm);
+    setNewTagInput('');
     setEditOpen(true);
   };
 
@@ -598,7 +611,8 @@ export default function RestockMonitors() {
     setForm({
       name: monitor.name || '',
       url: monitor.url || '',
-      tags_text: (monitor.tags || []).join(', '),
+      tags: Array.isArray(monitor.tags) ? [...monitor.tags] : [],
+      remark: monitor.remark || '',
       check_mode: monitor.check_mode || 'keyword',
       stock_keywords_text: (monitor.stock_keywords || []).join(', '),
       out_of_stock_keywords_text: (monitor.out_of_stock_keywords || []).join(', '),
@@ -613,7 +627,28 @@ export default function RestockMonitors() {
       notify_on_restock: monitor.notify_on_restock !== false,
       notify_on_out_of_stock: Boolean(monitor.notify_on_out_of_stock),
     });
+    setNewTagInput('');
     setEditOpen(true);
+  };
+
+  const handleAddNewTag = () => {
+    if (!newTagInput.trim()) return;
+    const pieces = newTagInput
+      .split(/[\n,，]/)
+      .map(s => s.trim())
+      .filter(Boolean);
+    setForm(f => {
+      const set = new Set(f.tags);
+      const next = [...f.tags];
+      for (const p of pieces) {
+        if (!set.has(p)) {
+          set.add(p);
+          next.push(p);
+        }
+      }
+      return { ...f, tags: next };
+    });
+    setNewTagInput('');
   };
 
   const handleSaveForm = async () => {
@@ -629,7 +664,8 @@ export default function RestockMonitors() {
     const payload = {
       name: form.name.trim(),
       url: form.url.trim(),
-      tags: parseKeywords(form.tags_text),
+      tags: form.tags,
+      remark: form.remark.trim(),
       check_mode: form.check_mode,
       stock_keywords: parseKeywords(form.stock_keywords_text),
       out_of_stock_keywords: parseKeywords(form.out_of_stock_keywords_text),
@@ -972,17 +1008,133 @@ export default function RestockMonitors() {
               />
             </div>
 
+            {/* 分类标签组件 */}
+            <div>
+              <Flex justify="between" align="center" className="mb-1">
+                <Text as="label" size="2" weight="bold">
+                  分类标签 (选填)
+                </Text>
+                {form.tags.length > 0 && (
+                  <Button
+                    size="1"
+                    variant="ghost"
+                    color="gray"
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, tags: [] }))}
+                  >
+                    清空标签
+                  </Button>
+                )}
+              </Flex>
+
+              {/* 当前已选标签与已有标签快捷选择卡片 */}
+              <Box className="p-2.5 rounded-md border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-900/50 mb-2">
+                <Text size="1" color="gray" weight="medium" className="block mb-1.5">
+                  已选标签:
+                </Text>
+                {form.tags.length > 0 ? (
+                  <Flex gap="1" wrap="wrap" align="center">
+                    {form.tags.map(tag => (
+                      <Badge
+                        key={tag}
+                        color="indigo"
+                        variant="solid"
+                        size="2"
+                        className="flex items-center gap-1 pl-2 pr-1"
+                      >
+                        #{tag}
+                        <span
+                          className="cursor-pointer hover:opacity-75 ml-0.5 inline-flex items-center"
+                          onClick={() => setForm(f => ({ ...f, tags: f.tags.filter(t => t !== tag) }))}
+                          title="移除此标签"
+                        >
+                          <X size={12} />
+                        </span>
+                      </Badge>
+                    ))}
+                  </Flex>
+                ) : (
+                  <Text size="1" color="gray">
+                    尚未添加标签（可点击下方已有标签快速添加，或在输入框输入新标签）
+                  </Text>
+                )}
+
+                {/* 快速点选已有标签 */}
+                {allTags.length > 0 && (
+                  <Box className="mt-2.5 pt-2 border-t border-gray-200/80 dark:border-gray-800">
+                    <Text size="1" color="gray" weight="medium" className="block mb-1.5">
+                      选择已有标签 (点击添加/移除):
+                    </Text>
+                    <Flex gap="1" wrap="wrap">
+                      {allTags.map(tag => {
+                        const isSelected = form.tags.includes(tag);
+                        return (
+                          <Badge
+                            key={tag}
+                            size="1"
+                            variant={isSelected ? 'surface' : 'outline'}
+                            color={isSelected ? 'indigo' : 'gray'}
+                            className={`cursor-pointer select-none transition-all hover:opacity-85 ${
+                              isSelected ? 'border-indigo-500 font-semibold' : ''
+                            }`}
+                            onClick={() => {
+                              setForm(f => {
+                                if (f.tags.includes(tag)) {
+                                  return { ...f, tags: f.tags.filter(t => t !== tag) };
+                                } else {
+                                  return { ...f, tags: [...f.tags, tag] };
+                                }
+                              });
+                            }}
+                            title={isSelected ? '点击取消选择' : '点击添加此标签'}
+                          >
+                            {isSelected ? '✓ ' : '+ '}#{tag}
+                          </Badge>
+                        );
+                      })}
+                    </Flex>
+                  </Box>
+                )}
+              </Box>
+
+              {/* 创建/输入新标签 */}
+              <Flex gap="2" align="center">
+                <TextField.Root
+                  placeholder="输入新标签 (如: 瓦工, CN2 GIA, 多个逗号分隔，回车添加)"
+                  value={newTagInput}
+                  onChange={e => setNewTagInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddNewTag();
+                    }
+                  }}
+                  className="flex-1"
+                  size="2"
+                >
+                  <TextField.Slot>
+                    <Tag size={13} className="text-gray-400" />
+                  </TextField.Slot>
+                </TextField.Root>
+                <Button size="2" variant="soft" type="button" onClick={handleAddNewTag}>
+                  <Plus size={14} /> 添加
+                </Button>
+              </Flex>
+            </div>
+
+            {/* 备注说明 */}
             <div>
               <Text as="label" size="2" weight="bold" className="block mb-1">
-                分类标签 (选填，多个可用逗号分隔)
+                备注说明 (选填)
               </Text>
-              <TextField.Root
-                placeholder="例如: RackNerd, 美国西海岸, 圣何塞, 9.9刀神机"
-                value={form.tags_text}
-                onChange={e => setForm(f => ({ ...f, tags_text: e.target.value }))}
+              <TextArea
+                rows={2}
+                placeholder="例如: 优惠码 BF2024 / 循环 8 折 / 年付 $35 / 洛杉矶 DC6 机房"
+                value={form.remark}
+                onChange={e => setForm(f => ({ ...f, remark: e.target.value }))}
               />
               <Text size="1" color="gray" className="mt-1 block">
-                用于按 VPS 商家、机房地区、特价活动等维度进行分类筛选
+                若填写备注，在推送补货通知（TG / 钉钉等）时将附带此内容；留空则不附带
               </Text>
             </div>
 

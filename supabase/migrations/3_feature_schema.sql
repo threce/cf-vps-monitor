@@ -274,6 +274,7 @@ create table if not exists restock_monitors (
 );
 
 alter table if exists restock_monitors add column if not exists tags jsonb not null default '[]'::jsonb;
+alter table if exists restock_monitors add column if not exists remark text not null default '';
 
 create table if not exists restock_checks (
   id bigint generated always as identity primary key,

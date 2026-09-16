@@ -155,6 +155,7 @@ function readRpcJsonObject(value: unknown): Record<string, string> {
 
 function normalizeRestockMonitor<T extends {
   tags?: unknown;
+  remark?: unknown;
   stock_keywords?: unknown;
   out_of_stock_keywords?: unknown;
   custom_headers?: unknown;
@@ -168,6 +169,7 @@ function normalizeRestockMonitor<T extends {
   return {
     ...monitor,
     tags: readRpcStringArray(m.tags),
+    remark: typeof m.remark === 'string' ? m.remark : '',
     stock_keywords: readRpcStringArray(m.stock_keywords),
     out_of_stock_keywords: readRpcStringArray(m.out_of_stock_keywords),
     custom_headers: readRpcJsonObject(m.custom_headers),
@@ -180,6 +182,7 @@ function normalizeRestockMonitor<T extends {
 
 function normalizeRestockMonitorList<T extends {
   tags?: unknown;
+  remark?: unknown;
   stock_keywords?: unknown;
   out_of_stock_keywords?: unknown;
   custom_headers?: unknown;

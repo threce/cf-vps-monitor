@@ -176,6 +176,7 @@ export function buildRestockNotification(input: {
   name: string;
   url: string;
   tags?: string[];
+  remark?: string | null;
   matchedText: string | null;
   eventTime?: string | Date;
 }): NotificationMessage {
@@ -184,10 +185,14 @@ export function buildRestockNotification(input: {
   const tagsLine = input.tags && input.tags.length > 0
     ? `分类标签: ${input.tags.map(t => `#${t}`).join(' ')}`
     : null;
+  const remarkLine = input.remark && input.remark.trim()
+    ? `备注信息: ${input.remark.trim()}`
+    : null;
   const lines = [
     `🛒🛒🛒 VPS 补货提醒`,
     `商品名称: ${input.name}`,
     ...(tagsLine ? [tagsLine] : []),
+    ...(remarkLine ? [remarkLine] : []),
     `当前状态: ✅ 已检测到补货 (${input.matchedText ? `匹配: ${input.matchedText}` : '检测到有货'})`,
     `直达购买: ${input.url}`,
     `检测时间: ${time}`,
@@ -209,6 +214,7 @@ export function buildOutOfStockNotification(input: {
   name: string;
   url: string;
   tags?: string[];
+  remark?: string | null;
   eventTime?: string | Date;
 }): NotificationMessage {
   const time = formatNotificationTime(input.eventTime || new Date());
@@ -216,10 +222,14 @@ export function buildOutOfStockNotification(input: {
   const tagsLine = input.tags && input.tags.length > 0
     ? `分类标签: ${input.tags.map(t => `#${t}`).join(' ')}`
     : null;
+  const remarkLine = input.remark && input.remark.trim()
+    ? `备注信息: ${input.remark.trim()}`
+    : null;
   const lines = [
     `📦📦📦 VPS 缺货通知`,
     `商品名称: ${input.name}`,
     ...(tagsLine ? [tagsLine] : []),
+    ...(remarkLine ? [remarkLine] : []),
     `当前状态: ❌ 已售罄或下架`,
     `商品链接: ${input.url}`,
     `检测时间: ${time}`,

@@ -5,12 +5,17 @@ import {
   shouldNotifyRestock,
   shouldNotifyOutOfStock,
 } from './restock-monitor.ts';
+import {
+  buildRestockNotification,
+  buildOutOfStockNotification,
+} from './notification-templates.ts';
 
-test('validateRestockMonitorInput validates name and URL', () => {
+test('validateRestockMonitorInput validates name, URL, tags, and remark', () => {
   const valid = validateRestockMonitorInput({
     name: 'RackNerd 2024 Black Friday 1C1G',
     url: 'https://my.racknerd.com/cart.php?a=add&pid=123',
     tags: ['RackNerd', '美国西海岸', '黑五特价'],
+    remark: '优惠码 BF2024 / 年付 10 刀',
     check_mode: 'keyword',
     stock_keywords: ['Add to Cart', 'In Stock'],
     out_of_stock_keywords: ['Out of Stock'],
@@ -20,6 +25,7 @@ test('validateRestockMonitorInput validates name and URL', () => {
     assert.equal(valid.value.name, 'RackNerd 2024 Black Friday 1C1G');
     assert.equal(valid.value.url, 'https://my.racknerd.com/cart.php?a=add&pid=123');
     assert.deepEqual(valid.value.tags, ['RackNerd', '美国西海岸', '黑五特价']);
+    assert.equal(valid.value.remark, '优惠码 BF2024 / 年付 10 刀');
     assert.equal(valid.value.check_mode, 'keyword');
     assert.deepEqual(valid.value.stock_keywords, ['Add to Cart', 'In Stock']);
     assert.deepEqual(valid.value.out_of_stock_keywords, ['Out of Stock']);
@@ -100,4 +106,38 @@ test('shouldNotifyOutOfStock triggers when in_stock changes to out_of_stock', ()
     shouldNotifyOutOfStock('out_of_stock', 'out_of_stock', true),
     false,
   );
+});
+
+test('buildRestockNotification conditionally includes remark and tags', () => {
+  // With remark and tags
+  const withRemark = buildRestockNotification({
+    name: 'Fat32 Special',
+    url: 'https://example.com/order',
+    tags: ['GreenCloud', 'SoftBank'],
+    remark: '优惠码 BF2024 / 年付 $35',
+    matchedText: 'Add to Cart',
+  });
+  assert.ok(withRemark.body.includes('分类标签: #GreenCloud #SoftBank'));
+  assert.ok(withRemark.body.includes('备注信息: 优惠码 BF2024 / 年付 $35'));
+
+  // Without remark
+  const withoutRemark = buildRestockNotification({
+    name: 'Fat32 Special',
+    url: 'https://example.com/order',
+    tags: ['GreenCloud'],
+    remark: '',
+    matchedText: 'Add to Cart',
+  });
+  assert.ok(withoutRemark.body.includes('分类标签: #GreenCloud'));
+  assert.ok(!withoutRemark.body.includes('备注信息'));
+
+  // With whitespace-only remark
+  const whitespaceRemark = buildRestockNotification({
+    name: 'Fat32 Special',
+    url: 'https://example.com/order',
+    remark: '   ',
+    matchedText: null,
+  });
+  assert.ok(!whitespaceRemark.body.includes('备注信息'));
+  assert.ok(!whitespaceRemark.body.includes('分类标签'));
 });

@@ -980,6 +980,7 @@ async function runRestockMonitorChecks(context: ScheduledRunContext, now: Date):
         name: updated.name,
         url: updated.url,
         tags: updated.tags,
+        remark: updated.remark,
         matchedText: updated.last_matched_text,
         eventTime: now,
       }), { key: `restock:${updated.id}`, eventId: `restock:${updated.last_in_stock_at || now.toISOString()}` }, now, undefined, 'all');
@@ -997,6 +998,7 @@ async function runRestockMonitorChecks(context: ScheduledRunContext, now: Date):
         name: updated.name,
         url: updated.url,
         tags: updated.tags,
+        remark: updated.remark,
         eventTime: now,
       }), { key: `restock:${updated.id}`, eventId: `out_of_stock:${updated.last_out_of_stock_at || now.toISOString()}` }, now, undefined, 'all');
       if (!sent) continue;
